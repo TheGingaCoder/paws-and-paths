@@ -30,8 +30,12 @@
       </header>
 
       <div class="map-actions" aria-label="Map actions">
-        <button id="findMeButton" class="icon-button" type="button" title="Find Me">LOC</button>
-        <button id="goHomeButton" class="icon-button" type="button" title="Go Home">HOME</button>
+        <button id="findMeButton" class="icon-button" type="button" title="Find Me" aria-label="Find Me">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 21l7-3 7 3z"/></svg>
+        </button>
+        <button id="goHomeButton" class="icon-button" type="button" title="Go Home" aria-label="Go Home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>
+        </button>
       </div>
 
       <section class="walk-hud" id="walkHud" hidden>
