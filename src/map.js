@@ -174,8 +174,11 @@ function setLineData(map, sourceId, features) {
 function setMarker(map, existing, position, className, label) {
   existing?.remove();
   const element = document.createElement("div");
-  element.className = className;
-  element.innerHTML = label;
+  element.className = "map-marker";
+  const visual = document.createElement("div");
+  visual.className = className;
+  visual.innerHTML = label;
+  element.append(visual);
   return new maplibregl.Marker({ element, anchor: "center" })
     .setLngLat([position.lng, position.lat])
     .addTo(map);

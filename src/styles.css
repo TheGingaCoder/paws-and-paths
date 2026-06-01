@@ -717,6 +717,11 @@ input:focus {
   animation: markerPop 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.map-marker {
+  display: grid;
+  place-items: center;
+}
+
 .marker.user {
   background: var(--accent-dark);
   animation: markerPop 300ms cubic-bezier(0.22, 1, 0.36, 1) both, softPulse 1800ms ease-in-out infinite;
