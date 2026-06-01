@@ -38,6 +38,12 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
     home: null,
     checkpoints: []
   };
+  const pendingMarkers = {
+    user: null,
+    home: null,
+    checkpoints: [],
+    completedCheckpointIndex: -1
+  };
   const pending = {
     savedRoutes: [],
     draftRoute: [],
@@ -45,17 +51,25 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
     liveWalk: []
   };
   let isLoaded = false;
+  let pendingCenter = null;
 
   map.on("load", () => {
     isLoaded = true;
-    addLineSource(map, "savedRoutes", "#6ba66f", 4);
+    addLineSource(map, "savedRoutes", "#7f8f83", 4);
     addLineSource(map, "draftRoute", "#d8973c", 4, [1.5, 1.5]);
-    addLineSource(map, "completedRoute", "#3e7d48", 8);
-    addLineSource(map, "liveWalk", "#3e7d48", 5);
+    addLineSource(map, "completedRoute", "#2f80ed", 8);
+    addLineSource(map, "liveWalk", "#1d2a21", 5);
     setLineData(map, "savedRoutes", pending.savedRoutes);
     setLineData(map, "draftRoute", pending.draftRoute);
     setLineData(map, "completedRoute", pending.completedRoute);
     setLineData(map, "liveWalk", pending.liveWalk);
+    if (pendingMarkers.home) applyHomeMarker(pendingMarkers.home);
+    if (pendingMarkers.user) applyUserMarker(pendingMarkers.user);
+    applyCheckpointMarkers(pendingMarkers.checkpoints, pendingMarkers.completedCheckpointIndex);
+    if (pendingCenter) {
+      map.jumpTo({ center: [pendingCenter.lng, pendingCenter.lat], zoom: pendingCenter.zoom });
+      pendingCenter = null;
+    }
   });
 
   return {
@@ -66,6 +80,10 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       return { lat: center.lat, lng: center.lng };
     },
     flyTo(position, zoom = 14) {
+      if (!isLoaded) {
+        pendingCenter = { ...position, zoom };
+        return;
+      }
       map.flyTo({ center: [position.lng, position.lat], zoom, essential: true });
     },
     fitRoute(route) {
@@ -73,26 +91,22 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       if (bounds) map.fitBounds(bounds, { padding: 80, maxZoom: 16 });
     },
     setUser(position) {
-      markers.user = setMarker(map, markers.user, position, "marker user", "");
+      pendingMarkers.user = position;
+      if (isLoaded) applyUserMarker(position);
     },
     setHome(position) {
-      markers.home = setMarker(map, markers.home, position, "marker home", "H");
+      pendingMarkers.home = position;
+      if (isLoaded) applyHomeMarker(position);
     },
     clearHome() {
       markers.home?.remove();
       markers.home = null;
+      pendingMarkers.home = null;
     },
     setCheckpoints(checkpoints = [], completedCheckpointIndex = -1) {
-      markers.checkpoints.forEach((marker) => marker.remove());
-      markers.checkpoints = checkpoints.map((point, index) =>
-        setMarker(
-          map,
-          null,
-          point,
-          `marker checkpoint${index <= completedCheckpointIndex ? " complete" : ""}`,
-          point.name?.toLowerCase().includes("home") ? "H" : String(index + 1)
-        )
-      );
+      pendingMarkers.checkpoints = checkpoints;
+      pendingMarkers.completedCheckpointIndex = completedCheckpointIndex;
+      if (isLoaded) applyCheckpointMarkers(checkpoints, completedCheckpointIndex);
     },
     setSavedRoutes(routes = []) {
       pending.savedRoutes = routes.flatMap((route) => routeToFeatures(route, route.id));
@@ -116,6 +130,23 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       if (isLoaded) setLineData(map, "liveWalk", pending.liveWalk);
     }
   };
+
+  function applyUserMarker(position) {
+    markers.user = setMarker(map, markers.user, position, "marker user", markerIcon("user"));
+  }
+
+  function applyHomeMarker(position) {
+    markers.home = setMarker(map, markers.home, position, "marker home", markerIcon("home"));
+  }
+
+  function applyCheckpointMarkers(checkpoints = [], completedCheckpointIndex = -1) {
+    markers.checkpoints.forEach((marker) => marker.remove());
+    markers.checkpoints = checkpoints.map((point, index) => {
+      const isComplete = index <= completedCheckpointIndex;
+      const type = markerType(point, index, checkpoints.length, isComplete);
+      return setMarker(map, null, point, `marker checkpoint ${type}${isComplete ? " complete" : ""}`, markerIcon(type));
+    });
+  }
 }
 
 function addLineSource(map, id, color, width, dasharray) {
@@ -144,10 +175,32 @@ function setMarker(map, existing, position, className, label) {
   existing?.remove();
   const element = document.createElement("div");
   element.className = className;
-  element.textContent = label;
+  element.innerHTML = label;
   return new maplibregl.Marker({ element, anchor: "center" })
     .setLngLat([position.lng, position.lat])
     .addTo(map);
+}
+
+function markerType(point, index, total, isComplete) {
+  const name = point.name?.toLowerCase() ?? "";
+  if (name.includes("home") || name.includes("finish")) return "home-stop";
+  if (isComplete) return "done";
+  if (index === 0) return "start";
+  if (index === total - 1) return "finish";
+  return "paw";
+}
+
+function markerIcon(type) {
+  const icons = {
+    user: '<span class="marker-dot"></span>',
+    home: '<span class="marker-symbol">⌂</span>',
+    "home-stop": '<span class="marker-symbol">⌂</span>',
+    start: '<span class="marker-symbol">⚑</span>',
+    finish: '<span class="marker-symbol">◆</span>',
+    done: '<span class="marker-symbol">✓</span>',
+    paw: '<span class="marker-symbol">•</span>'
+  };
+  return icons[type] ?? icons.paw;
 }
 
 function routeToFeatures(route, id) {

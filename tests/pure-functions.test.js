@@ -3,7 +3,7 @@ import test from "node:test";
 import { formatDistance, formatDuration } from "../src/format.js";
 import { haversineDistanceMeters, nextCheckpointDetection } from "../src/geo.js";
 import { buildRouteCheckpoints } from "../src/routes.js";
-import { completedSegmentPoints, fetchRoutedSegment } from "../src/routing.js";
+import { completedSegmentPoints, curvedFallbackSegment, fetchRoutedSegment } from "../src/routing.js";
 import { scoreWalk } from "../src/scoring.js";
 import { eraseStoredData, loadJson, loadSettings } from "../src/storage.js";
 
@@ -94,7 +94,15 @@ test("routing falls back to straight segment when request fails", async () => {
   const start = { lat: 53.48, lng: -2.24 };
   const end = { lat: 53.49, lng: -2.25 };
   const segment = await fetchRoutedSegment(start, end, async () => ({ ok: false }));
-  assert.deepEqual(segment, [start, end]);
+  assert.ok(segment.length > 2);
+  assert.deepEqual(segment[0], start);
+  assert.deepEqual(segment.at(-1), end);
+});
+
+test("curved fallback segment creates a visible curve", () => {
+  const segment = curvedFallbackSegment({ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 });
+  assert.ok(segment.length > 2);
+  assert.ok(segment.some((point) => point.lat !== 0));
 });
 
 test("completedSegmentPoints returns routed segments up to completed checkpoint", () => {

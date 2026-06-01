@@ -11,7 +11,7 @@ export async function buildRoutedSegments(checkpoints, fetcher = fetch) {
 }
 
 export async function fetchRoutedSegment(start, end, fetcher = fetch) {
-  const straightLine = [start, end];
+  const fallback = curvedFallbackSegment(start, end);
   try {
     const coordinates = `${start.lng},${start.lat};${end.lng},${end.lat}`;
     const params = new URLSearchParams({
@@ -22,14 +22,33 @@ export async function fetchRoutedSegment(start, end, fetcher = fetch) {
     const response = await fetcher(`${ROUTING_ENDPOINT}/${coordinates}?${params.toString()}`, {
       headers: { Accept: "application/json" }
     });
-    if (!response.ok) return straightLine;
+    if (!response.ok) return fallback;
     const data = await response.json();
     const routedCoordinates = data?.routes?.[0]?.geometry?.coordinates;
-    if (!Array.isArray(routedCoordinates) || routedCoordinates.length < 2) return straightLine;
+    if (!Array.isArray(routedCoordinates) || routedCoordinates.length < 2) return fallback;
     return routedCoordinates.map(([lng, lat]) => ({ lat, lng }));
   } catch {
-    return straightLine;
+    return fallback;
   }
+}
+
+export function curvedFallbackSegment(start, end) {
+  const points = [];
+  const latDelta = end.lat - start.lat;
+  const lngDelta = end.lng - start.lng;
+  const curve = Math.min(0.0018, Math.max(0.00025, Math.hypot(latDelta, lngDelta) * 0.12));
+  const normalLat = -lngDelta;
+  const normalLng = latDelta;
+  const normalLength = Math.hypot(normalLat, normalLng) || 1;
+  for (let step = 0; step <= 16; step += 1) {
+    const t = step / 16;
+    const arc = Math.sin(Math.PI * t) * curve;
+    points.push({
+      lat: start.lat + latDelta * t + (normalLat / normalLength) * arc,
+      lng: start.lng + lngDelta * t + (normalLng / normalLength) * arc
+    });
+  }
+  return points;
 }
 
 export function completedSegmentPoints(route, completedCheckpointIndex) {

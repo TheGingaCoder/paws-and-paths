@@ -704,8 +704,9 @@ input:focus {
 
 .marker {
   display: grid;
-  min-width: 30px;
-  height: 30px;
+  position: relative;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 2px solid white;
   border-radius: 999px;
@@ -721,8 +722,7 @@ input:focus {
   animation: markerPop 300ms cubic-bezier(0.22, 1, 0.36, 1) both, softPulse 1800ms ease-in-out infinite;
 }
 
-.marker.user::after {
-  content: "";
+.marker-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -731,10 +731,7 @@ input:focus {
 
 .marker.home {
   background: var(--warning);
-  min-width: 34px;
-  height: 34px;
   color: white;
-  font-size: 0.84rem;
 }
 
 .marker.home::after {
@@ -750,7 +747,7 @@ input:focus {
 }
 
 .marker.checkpoint.complete {
-  background: var(--accent);
+  background: #2f80ed;
   color: white;
 }
 
@@ -760,6 +757,28 @@ input:focus {
   inset: -6px;
   border: 2px solid rgba(107, 166, 111, 0.28);
   border-radius: inherit;
+}
+
+.marker.checkpoint.start {
+  background: var(--accent-dark);
+}
+
+.marker.checkpoint.finish,
+.marker.checkpoint.home-stop {
+  background: var(--warning);
+}
+
+.marker.checkpoint.paw {
+  background: #435347;
+}
+
+.marker-symbol {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .toast-region {

@@ -71,7 +71,10 @@ document.getElementById("findMeButton").addEventListener("click", findMe);
 document.getElementById("goHomeButton").addEventListener("click", goHome);
 document.addEventListener("pointerdown", addPressFeedback);
 
-if (state.homeBase) mapController.setHome(state.homeBase);
+if (state.homeBase) {
+  mapController.setHome(state.homeBase);
+  mapController.flyTo(state.homeBase, 15);
+}
 mapController.setSavedRoutes(state.routes);
 render();
 
