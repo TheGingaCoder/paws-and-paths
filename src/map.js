@@ -1,6 +1,6 @@
 const DEFAULT_CENTER = [-2.2426, 53.4808];
 
-export function createMapController({ containerId, fallbackId, onMapClick }) {
+export function createMapController({ containerId, fallbackId, onMapClick, onReady }) {
   const fallback = document.getElementById(fallbackId);
   if (!window.maplibregl) {
     fallback.hidden = false;
@@ -70,6 +70,7 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       map.jumpTo({ center: [pendingCenter.lng, pendingCenter.lat], zoom: pendingCenter.zoom });
       pendingCenter = null;
     }
+    onReady?.();
   });
 
   return {
@@ -85,6 +86,13 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
         return;
       }
       map.flyTo({ center: [position.lng, position.lat], zoom, essential: true });
+    },
+    jumpTo(position, zoom = 14) {
+      if (!isLoaded) {
+        pendingCenter = { ...position, zoom };
+        return;
+      }
+      map.jumpTo({ center: [position.lng, position.lat], zoom });
     },
     fitRoute(route) {
       const bounds = boundsForPoints(route.checkpoints);
@@ -252,6 +260,7 @@ function createNoopMap() {
     ready: false,
     getCenter: () => ({ lat: 53.4808, lng: -2.2426 }),
     flyTo: () => {},
+    jumpTo: () => {},
     fitRoute: () => {},
     setUser: () => {},
     setHome: () => {},

@@ -60,6 +60,11 @@ const mapController = createMapController({
   onMapClick: (point) => {
     if (state.tab !== "create") return;
     addDraftCheckpoint(point);
+  },
+  onReady: () => {
+    if (!state.homeBase) return;
+    mapController.setHome(state.homeBase);
+    mapController.jumpTo(state.homeBase, 15);
   }
 });
 
@@ -73,7 +78,7 @@ document.addEventListener("pointerdown", addPressFeedback);
 
 if (state.homeBase) {
   mapController.setHome(state.homeBase);
-  mapController.flyTo(state.homeBase, 15);
+  mapController.jumpTo(state.homeBase, 15);
 }
 mapController.setSavedRoutes(state.routes);
 render();
