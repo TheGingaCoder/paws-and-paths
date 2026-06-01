@@ -731,6 +731,18 @@ input:focus {
 
 .marker.home {
   background: var(--warning);
+  min-width: 34px;
+  height: 34px;
+  color: white;
+  font-size: 0.84rem;
+}
+
+.marker.home::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 2px solid rgba(216, 151, 60, 0.3);
+  border-radius: inherit;
 }
 
 .marker.checkpoint {

@@ -76,7 +76,7 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       markers.user = setMarker(map, markers.user, position, "marker user", "");
     },
     setHome(position) {
-      markers.home = setMarker(map, markers.home, position, "marker home", "Home");
+      markers.home = setMarker(map, markers.home, position, "marker home", "H");
     },
     clearHome() {
       markers.home?.remove();
