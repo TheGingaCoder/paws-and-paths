@@ -41,6 +41,7 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
   const pending = {
     savedRoutes: [],
     draftRoute: [],
+    completedRoute: [],
     liveWalk: []
   };
   let isLoaded = false;
@@ -49,9 +50,11 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
     isLoaded = true;
     addLineSource(map, "savedRoutes", "#6ba66f", 4);
     addLineSource(map, "draftRoute", "#d8973c", 4, [1.5, 1.5]);
+    addLineSource(map, "completedRoute", "#3e7d48", 8);
     addLineSource(map, "liveWalk", "#3e7d48", 5);
     setLineData(map, "savedRoutes", pending.savedRoutes);
     setLineData(map, "draftRoute", pending.draftRoute);
+    setLineData(map, "completedRoute", pending.completedRoute);
     setLineData(map, "liveWalk", pending.liveWalk);
   });
 
@@ -70,7 +73,7 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       if (bounds) map.fitBounds(bounds, { padding: 80, maxZoom: 16 });
     },
     setUser(position) {
-      markers.user = setMarker(map, markers.user, position, "marker user", "You");
+      markers.user = setMarker(map, markers.user, position, "marker user", "");
     },
     setHome(position) {
       markers.home = setMarker(map, markers.home, position, "marker home", "Home");
@@ -79,20 +82,34 @@ export function createMapController({ containerId, fallbackId, onMapClick }) {
       markers.home?.remove();
       markers.home = null;
     },
-    setCheckpoints(checkpoints = []) {
+    setCheckpoints(checkpoints = [], completedCheckpointIndex = -1) {
       markers.checkpoints.forEach((marker) => marker.remove());
       markers.checkpoints = checkpoints.map((point, index) =>
-        setMarker(map, null, point, "marker checkpoint", String(index + 1))
+        setMarker(
+          map,
+          null,
+          point,
+          `marker checkpoint${index <= completedCheckpointIndex ? " complete" : ""}`,
+          point.name?.toLowerCase().includes("home") ? "H" : String(index + 1)
+        )
       );
     },
     setSavedRoutes(routes = []) {
-      pending.savedRoutes = routes.flatMap((route) => routeToFeature(route, route.id));
+      pending.savedRoutes = routes.flatMap((route) => routeToFeatures(route, route.id));
       if (isLoaded) setLineData(map, "savedRoutes", pending.savedRoutes);
     },
-    setDraftRoute(checkpoints = []) {
-      pending.draftRoute = checkpoints.length > 1 ? [pointsToFeature(checkpoints)] : [];
+    setDraftRoute(checkpoints = [], segmentGeometries = []) {
+      pending.draftRoute = segmentGeometries.length
+        ? segmentGeometries.map((segment, index) => pointsToFeature(segment, { segment: index }))
+        : checkpoints.length > 1 ? [pointsToFeature(checkpoints)] : [];
       if (isLoaded) setLineData(map, "draftRoute", pending.draftRoute);
       this.setCheckpoints(checkpoints);
+    },
+    setCompletedRoute(route, completedCheckpointIndex = -1) {
+      const completedPoints = completedSegmentPoints(route, completedCheckpointIndex);
+      pending.completedRoute = completedPoints.length > 1 ? [pointsToFeature(completedPoints)] : [];
+      if (isLoaded) setLineData(map, "completedRoute", pending.completedRoute);
+      this.setCheckpoints(route?.checkpoints ?? [], completedCheckpointIndex);
     },
     setLiveWalk(positions = []) {
       pending.liveWalk = positions.length > 1 ? [pointsToFeature(positions)] : [];
@@ -133,8 +150,23 @@ function setMarker(map, existing, position, className, label) {
     .addTo(map);
 }
 
-function routeToFeature(route, id) {
-  return pointsToFeature(route.checkpoints, { id, name: route.name });
+function routeToFeatures(route, id) {
+  if (route.segmentGeometries?.length) {
+    return route.segmentGeometries.map((segment, index) =>
+      pointsToFeature(segment, { id, name: route.name, segment: index })
+    );
+  }
+  return [pointsToFeature(route.checkpoints, { id, name: route.name })];
+}
+
+function completedSegmentPoints(route, completedCheckpointIndex) {
+  if (!route || completedCheckpointIndex < 1) return [];
+  const segments = route.segmentGeometries?.length
+    ? route.segmentGeometries
+    : route.checkpoints.slice(0, -1).map((checkpoint, index) => [checkpoint, route.checkpoints[index + 1]]);
+  return segments
+    .slice(0, completedCheckpointIndex)
+    .flatMap((segment, index) => index === 0 ? segment : segment.slice(1));
 }
 
 function pointsToFeature(points, properties = {}) {
@@ -171,6 +203,7 @@ function createNoopMap() {
     setCheckpoints: () => {},
     setSavedRoutes: () => {},
     setDraftRoute: () => {},
+    setCompletedRoute: () => {},
     setLiveWalk: () => {}
   };
 }

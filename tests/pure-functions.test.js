@@ -3,6 +3,7 @@ import test from "node:test";
 import { formatDistance, formatDuration } from "../src/format.js";
 import { haversineDistanceMeters, nextCheckpointDetection } from "../src/geo.js";
 import { buildRouteCheckpoints } from "../src/routes.js";
+import { completedSegmentPoints, fetchRoutedSegment } from "../src/routing.js";
 import { scoreWalk } from "../src/scoring.js";
 import { eraseStoredData, loadJson, loadSettings } from "../src/storage.js";
 
@@ -87,4 +88,26 @@ test("eraseStoredData clears selected storage key", () => {
   const storage = { removeItem: (key) => removed.push(key) };
   eraseStoredData("walks", storage);
   assert.deepEqual(removed, ["paws-paths:walks"]);
+});
+
+test("routing falls back to straight segment when request fails", async () => {
+  const start = { lat: 53.48, lng: -2.24 };
+  const end = { lat: 53.49, lng: -2.25 };
+  const segment = await fetchRoutedSegment(start, end, async () => ({ ok: false }));
+  assert.deepEqual(segment, [start, end]);
+});
+
+test("completedSegmentPoints returns routed segments up to completed checkpoint", () => {
+  const route = {
+    checkpoints: [{}, {}, {}],
+    segmentGeometries: [
+      [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }],
+      [{ lat: 2, lng: 2 }, { lat: 3, lng: 3 }]
+    ]
+  };
+  assert.deepEqual(completedSegmentPoints(route, 2), [
+    { lat: 1, lng: 1 },
+    { lat: 2, lng: 2 },
+    { lat: 3, lng: 3 }
+  ]);
 });

@@ -3,6 +3,7 @@ import { formatDistance, formatDuration, formatRelativeDate } from "./format.js"
 import { createMapController } from "./map.js";
 import { Haptics } from "./haptics.js";
 import { buildRouteCheckpoints } from "./routes.js";
+import { buildRoutedSegments } from "./routing.js";
 import { averageCheckpointSeconds, scoreWalk } from "./scoring.js";
 import {
   clearHomeBase,
@@ -28,7 +29,7 @@ const state = {
   homeBase: loadHomeBase(),
   xp: loadXp(),
   settings: loadSettings(),
-  draft: { name: "", checkpoints: [], cyclic: false },
+  draft: { name: "", checkpoints: [], cyclic: false, segmentGeometries: [], isRouting: false },
   activeTracker: null,
   activeRoute: null,
   walkFinishing: false,
@@ -208,7 +209,7 @@ function renderCreate() {
           <small>${state.homeBase ? "Start at home, visit checkpoints, finish at home." : "Set a home base first to use home loops."}</small>
         </span>
       </label>
-      <p class="hint">${state.draft.cyclic ? "Tap the map to add the stops between home start and home finish." : "Tap the map to add checkpoints. First stop becomes Start."}</p>
+      <p class="hint">${state.draft.isRouting ? "Finding nearby paths for this route..." : state.draft.cyclic ? "Tap the map to add the stops between home start and home finish." : "Tap the map to add checkpoints. First stop becomes Start."}</p>
       ${state.draft.cyclic && state.homeBase ? `<div class="checkpoint-preview"><strong>Home start</strong><span>${state.homeBase.lat.toFixed(4)}, ${state.homeBase.lng.toFixed(4)}</span></div>` : ""}
       <ol class="checkpoint-list">
         ${state.draft.checkpoints.map((point) => `<li><strong>${point.name}</strong><span>${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}</span></li>`).join("")}
@@ -216,7 +217,7 @@ function renderCreate() {
       ${state.draft.cyclic && state.homeBase ? `<div class="checkpoint-preview finish"><strong>Home finish</strong><span>${state.homeBase.lat.toFixed(4)}, ${state.homeBase.lng.toFixed(4)}</span></div>` : ""}
       <div class="action-row">
         <button class="secondary" data-action="add-centre" type="button">Add map centre</button>
-        <button class="primary" type="submit" ${canSaveDraft() ? "" : "disabled"}>Save route</button>
+        <button class="primary" type="submit" ${canSaveDraft() ? "" : "disabled"}>${state.draft.isRouting ? "Routing" : "Save route"}</button>
         <button class="secondary" data-action="clear-draft" type="button">Clear</button>
       </div>
     </form>
@@ -226,19 +227,17 @@ function renderCreate() {
   });
   document.getElementById("cyclicRoute").addEventListener("change", (event) => {
     state.draft.cyclic = event.target.checked;
+    state.draft.segmentGeometries = [];
     audio.success();
     renderCreate();
+    updateDraftRouteGeometry();
   });
   document.getElementById("routeForm").addEventListener("submit", saveDraftRoute);
   bindActions({
     "add-centre": () => addDraftCheckpoint(mapController.getCenter()),
     "clear-draft": clearDraft
   });
-  mapController.setDraftRoute(buildRouteCheckpoints({
-    draftCheckpoints: state.draft.checkpoints,
-    cyclic: state.draft.cyclic,
-    homeBase: state.homeBase
-  }));
+  updateDraftMap();
 }
 
 function renderSettings() {
@@ -363,17 +362,15 @@ function addDraftCheckpoint(point) {
     name: state.draft.cyclic ? `Checkpoint ${index + 1}` : index === 0 ? "Start" : `Checkpoint ${index + 1}`
   };
   state.draft.checkpoints.push(named);
-  mapController.setDraftRoute(buildRouteCheckpoints({
-    draftCheckpoints: state.draft.checkpoints,
-    cyclic: state.draft.cyclic,
-    homeBase: state.homeBase
-  }));
+  state.draft.segmentGeometries = [];
+  updateDraftMap();
   audio.checkpoint();
   showToast(`${named.name} added`);
   renderCreate();
+  updateDraftRouteGeometry();
 }
 
-function saveDraftRoute(event) {
+async function saveDraftRoute(event) {
   event.preventDefault();
   const name = new FormData(event.currentTarget).get("routeName").trim() || "Untitled route";
   if (!canSaveDraft()) return;
@@ -382,10 +379,14 @@ function saveDraftRoute(event) {
     cyclic: state.draft.cyclic,
     homeBase: state.homeBase
   });
+  state.draft.isRouting = true;
+  renderCreate();
+  const segmentGeometries = await buildRoutedSegments(checkpoints);
   const route = {
     id: createId("route"),
     name,
     checkpoints,
+    segmentGeometries,
     cyclic: state.draft.cyclic,
     createdAt: new Date().toISOString()
   };
@@ -398,14 +399,39 @@ function saveDraftRoute(event) {
 }
 
 function clearDraft() {
-  state.draft = { name: "", checkpoints: [], cyclic: false };
+  state.draft = { name: "", checkpoints: [], cyclic: false, segmentGeometries: [], isRouting: false };
   mapController.setDraftRoute([]);
   render();
 }
 
 function canSaveDraft() {
+  if (state.draft.isRouting) return false;
   if (state.draft.cyclic) return Boolean(state.homeBase) && state.draft.checkpoints.length >= 1;
   return state.draft.checkpoints.length >= 2;
+}
+
+function getDraftRouteCheckpoints() {
+  return buildRouteCheckpoints({
+    draftCheckpoints: state.draft.checkpoints,
+    cyclic: state.draft.cyclic,
+    homeBase: state.homeBase
+  });
+}
+
+function updateDraftMap() {
+  mapController.setDraftRoute(getDraftRouteCheckpoints(), state.draft.segmentGeometries);
+}
+
+async function updateDraftRouteGeometry() {
+  const checkpoints = getDraftRouteCheckpoints();
+  if (checkpoints.length < 2) return;
+  state.draft.isRouting = true;
+  renderCreate();
+  const segmentGeometries = await buildRoutedSegments(checkpoints);
+  state.draft.segmentGeometries = segmentGeometries;
+  state.draft.isRouting = false;
+  updateDraftMap();
+  renderCreate();
 }
 
 async function searchPlaces(query, submitButton) {
@@ -520,6 +546,7 @@ function eraseData(type) {
     state.routes = [];
     mapController.setSavedRoutes([]);
     mapController.setCheckpoints([]);
+    mapController.setCompletedRoute(null);
   }
   if (type === "home" || type === "all") {
     state.homeBase = null;
@@ -540,6 +567,7 @@ function viewRoute(id) {
   const route = state.routes.find((item) => item.id === id);
   if (!route) return;
   mapController.setCheckpoints(route.checkpoints);
+  mapController.setCompletedRoute(route, -1);
   mapController.fitRoute(route);
   showToast("Route on map");
 }
@@ -629,6 +657,7 @@ function stopWalk(route) {
   saveWalks(state.walks);
   saveXp(state.xp);
   mapController.setLiveWalk([]);
+  mapController.setCompletedRoute(route, route.checkpoints.length - 1);
   audio.finish();
   haptics.finish();
   showToast(`+${score.xp} XP`);
@@ -636,7 +665,10 @@ function stopWalk(route) {
 }
 
 function handleWalkUpdate(route, walk) {
+  const latestPosition = walk.positions.at(-1);
+  if (latestPosition) mapController.setUser(latestPosition);
   mapController.setLiveWalk(walk.positions);
+  mapController.setCompletedRoute(route, walk.completedCheckpointIndex);
   updateWalkHud();
   const finalCheckpointIndex = route.checkpoints.length - 1;
   if (walk.completedCheckpointIndex > state.checkpointNotifiedIndex) {
