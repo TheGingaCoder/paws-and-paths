@@ -4,88 +4,82 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Paws & Paths</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
-    />
-    <link rel="stylesheet" href="./src/styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main id="app" class="app-shell">
-      <div id="map" class="map" aria-label="Walking route map"></div>
-      <div id="mapFallback" class="map-fallback" hidden>
-        <strong>Map is taking a little walk.</strong>
-        <span>Routes still work, but map tiles could not load right now.</span>
-      </div>
+    <main class="app-shell">
+      <section class="screen active" id="mapScreen" data-screen="map" aria-label="Map">
+        <div class="mock-map" aria-hidden="true">
+          <div class="park park-one">Oak Meadow</div>
+          <div class="park park-two">North Field</div>
+          <div class="water"></div>
+          <div class="road road-main"></div>
+          <div class="road road-second"></div>
+          <div class="road road-third"></div>
+          <svg class="route-layer" viewBox="0 0 390 844" preserveAspectRatio="none">
+            <path class="route route-evening" d="M72 585 C118 515, 128 458, 184 423 S290 364, 314 290" />
+            <path class="route route-morning" d="M88 334 C128 304, 156 270, 205 260 S286 253, 324 216" />
+            <path class="route route-complete" d="M72 585 C118 515, 128 458, 184 423" />
+          </svg>
+          <div class="map-label label-route-one">Evening Park Loop</div>
+          <div class="map-label label-route-two">Morning Sniff Route</div>
+          <div class="map-marker home-marker"><i class="fa-solid fa-house"></i><span>Home Base</span></div>
+          <div class="checkpoint cp-start"><i class="fa-solid fa-flag"></i><span>Start</span></div>
+          <div class="checkpoint cp-gate"><i class="fa-solid fa-location-dot"></i><span>Park Gate</span></div>
+          <div class="checkpoint cp-tree"><i class="fa-solid fa-tree"></i><span>Big Tree</span></div>
+          <div class="checkpoint cp-field"><i class="fa-solid fa-location-dot"></i><span>Field Loop</span></div>
+          <div class="checkpoint cp-home"><i class="fa-solid fa-house"></i><span>Home</span></div>
+        </div>
 
-      <header class="top-bar">
-        <div>
-          <p class="eyebrow">Paws & Paths</p>
-          <h1 id="viewTitle">Home</h1>
-        </div>
-        <div class="xp-pill" aria-label="Total XP">
-          <span id="xpValue">0</span>
-          <small>XP</small>
-        </div>
-      </header>
+        <header class="map-search glass">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>Search parks, routes, postcodes</span>
+        </header>
 
-      <div class="map-actions" aria-label="Map actions">
-        <button id="findMeButton" class="icon-button" type="button" title="Find Me" aria-label="Find Me">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 21l7-3 7 3z"/></svg>
-        </button>
-        <button id="goHomeButton" class="icon-button" type="button" title="Go Home" aria-label="Go Home">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>
-        </button>
-      </div>
+        <div class="map-controls">
+          <button class="round-control" aria-label="Locate me"><i class="fa-solid fa-location-crosshairs"></i></button>
+          <button class="round-control" aria-label="Home"><i class="fa-solid fa-house"></i></button>
+          <button class="round-control" aria-label="Layers"><i class="fa-solid fa-layer-group"></i></button>
+        </div>
 
-      <section class="walk-hud" id="walkHud" hidden>
-        <div class="walk-hud-main">
-          <small>Active walk</small>
-          <strong id="walkRouteName">Route</strong>
-        </div>
-        <div class="hud-stats">
-          <span><strong id="walkTime">0:00</strong><small>time</small></span>
-          <span><strong id="walkDistance">0 m</strong><small>distance</small></span>
-          <span><strong id="walkCheckpoints">0/0</strong><small>stops</small></span>
-        </div>
+        <article class="walk-card glass">
+          <div class="walk-icon"><i class="fa-solid fa-dog"></i></div>
+          <div>
+            <p class="eyebrow">Ready for Walkies?</p>
+            <h1>Evening Park Loop</h1>
+            <p>2.4 km · 5 checkpoints · Milo selected</p>
+          </div>
+          <button class="primary-action"><i class="fa-solid fa-person-walking"></i> Start</button>
+        </article>
       </section>
 
-      <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-      <div id="resultsModal" class="results-modal" hidden></div>
+      <section class="screen content-screen" id="routesScreen" data-screen="routes" aria-label="Routes"></section>
+      <section class="screen content-screen" id="dogsScreen" data-screen="dogs" aria-label="Dogs"></section>
+      <section class="screen content-screen" id="accountScreen" data-screen="account" aria-label="Account"></section>
 
-      <section class="bottom-sheet" aria-live="polite">
-        <div class="sheet-handle" aria-hidden="true"></div>
-        <div id="panelContent" class="panel-content"></div>
-        <nav class="tabs" aria-label="Primary">
-          <button class="tab active" data-tab="home" type="button" aria-label="Home" title="Home">
-            <span class="tab-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg>
-            </span>
-          </button>
-          <button class="tab" data-tab="search" type="button" aria-label="Search" title="Search">
-            <span class="tab-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="m20 20-4.4-4.4M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4z"/></svg>
-            </span>
-          </button>
-          <button class="tab" data-tab="routes" type="button" aria-label="Routes" title="Routes">
-            <span class="tab-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M6 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.5 15.5h3.8a3.7 3.7 0 0 0 0-7.4H9.5"/></svg>
-            </span>
-          </button>
-          <button class="tab" data-tab="create" type="button" aria-label="Create route" title="Create route">
-            <span class="tab-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            </span>
-          </button>
-          <button class="tab" data-tab="settings" type="button" aria-label="Settings" title="Settings">
-            <span class="tab-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.9 3.2-.2-.1a1.7 1.7 0 0 0-2 .4l-.4.4h-3.8l-.4-.4a1.7 1.7 0 0 0-2-.4l-.2.1L7 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1.1H5.5v-3.8h.3A1.7 1.7 0 0 0 7.4 9a1.7 1.7 0 0 0-.3-1.9L7 7l1.9-3.2.2.1a1.7 1.7 0 0 0 2-.4l.4-.4h3.8l.4.4a1.7 1.7 0 0 0 2 .4l.2-.1L20 7l-.2.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1.1h.4v3.8h-.4A1.7 1.7 0 0 0 19.4 15z"/></svg>
-            </span>
-          </button>
-        </nav>
-      </section>
+      <nav class="tab-bar glass" aria-label="Main tabs">
+        <button class="tab active" data-tab="map" type="button">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>Map</span>
+        </button>
+        <button class="tab" data-tab="routes" type="button">
+          <i class="fa-solid fa-route"></i>
+          <span>Routes</span>
+        </button>
+        <button class="tab" data-tab="dogs" type="button">
+          <i class="fa-solid fa-dog"></i>
+          <span>Dogs</span>
+        </button>
+        <button class="tab" data-tab="account" type="button">
+          <i class="fa-solid fa-circle-user"></i>
+          <span>Account</span>
+        </button>
+      </nav>
     </main>
-    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script type="module" src="./src/app.js"></script>
+
+    <div class="modal-layer" id="modalLayer" hidden></div>
+    <div class="toast" id="toast" hidden>Design mockup only.</div>
+    <script src="./app.js"></script>
   </body>
 </html>
