@@ -4,53 +4,62 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Paws & Paths</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <section class="screen active" id="mapScreen" data-screen="map" aria-label="Map">
-        <div class="mock-map" aria-hidden="true">
+        <div class="mock-map">
+          <div id="realMap" class="real-map" aria-label="Interactive route map"></div>
           <div class="park park-one">Oak Meadow</div>
           <div class="park park-two">North Field</div>
           <div class="water"></div>
           <div class="road road-main"></div>
           <div class="road road-second"></div>
           <div class="road road-third"></div>
-          <svg class="route-layer" viewBox="0 0 390 844" preserveAspectRatio="none">
+          <svg class="route-layer decorative-routes" viewBox="0 0 390 844" preserveAspectRatio="none" aria-hidden="true">
             <path class="route route-evening" d="M72 585 C118 515, 128 458, 184 423 S290 364, 314 290" />
             <path class="route route-morning" d="M88 334 C128 304, 156 270, 205 260 S286 253, 324 216" />
             <path class="route route-complete" d="M72 585 C118 515, 128 458, 184 423" />
           </svg>
           <div class="map-label label-route-one">Evening Park Loop</div>
           <div class="map-label label-route-two">Morning Sniff Route</div>
-          <div class="map-marker home-marker"><i class="fa-solid fa-house"></i><span>Home Base</span></div>
-          <div class="checkpoint cp-start"><i class="fa-solid fa-flag"></i><span>Start</span></div>
-          <div class="checkpoint cp-gate"><i class="fa-solid fa-location-dot"></i><span>Park Gate</span></div>
-          <div class="checkpoint cp-tree"><i class="fa-solid fa-tree"></i><span>Big Tree</span></div>
-          <div class="checkpoint cp-field"><i class="fa-solid fa-location-dot"></i><span>Field Loop</span></div>
-          <div class="checkpoint cp-home"><i class="fa-solid fa-house"></i><span>Home</span></div>
         </div>
 
         <header class="map-search glass">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <span>Search parks, routes, postcodes</span>
+          <span id="mapSearchLabel">Search parks, routes, postcodes</span>
         </header>
 
         <div class="map-controls">
-          <button class="round-control" aria-label="Locate me"><i class="fa-solid fa-location-crosshairs"></i></button>
-          <button class="round-control" aria-label="Home"><i class="fa-solid fa-house"></i></button>
-          <button class="round-control" aria-label="Layers"><i class="fa-solid fa-layer-group"></i></button>
+          <button class="round-control" data-action="locate-user" aria-label="Locate me"><i class="fa-solid fa-location-crosshairs"></i></button>
+          <button class="round-control" data-action="set-home" aria-label="Set home base"><i class="fa-solid fa-house"></i></button>
+          <button class="round-control" data-action="focus-route" aria-label="Focus route"><i class="fa-solid fa-route"></i></button>
         </div>
+
+        <aside class="route-builder glass" id="routeBuilder" hidden>
+          <div>
+            <p class="eyebrow">Route Builder</p>
+            <h2 id="builderTitle">Tap the map</h2>
+            <p id="builderHint">Add at least two checkpoints to save a route.</p>
+          </div>
+          <div class="builder-actions">
+            <button class="secondary-action" data-action="undo-checkpoint"><i class="fa-solid fa-rotate-left"></i>Undo</button>
+            <button class="primary-action" data-action="save-built-route"><i class="fa-solid fa-check"></i>Save</button>
+            <button class="ghost-action" data-action="cancel-route-builder">Cancel</button>
+          </div>
+        </aside>
 
         <article class="walk-card glass">
           <div class="walk-icon"><i class="fa-solid fa-dog"></i></div>
           <div>
             <p class="eyebrow">Ready for Walkies?</p>
-            <h1>Evening Park Loop</h1>
-            <p>2.4 km · 5 checkpoints · Milo selected</p>
+            <h1 id="activeRouteName">Evening Park Loop</h1>
+            <p id="activeRouteMeta">2.4 km &middot; 5 checkpoints &middot; Milo selected</p>
           </div>
-          <button class="primary-action"><i class="fa-solid fa-person-walking"></i> Start</button>
+          <button class="primary-action" data-action="start-route-builder"><i class="fa-solid fa-route"></i> Build Route</button>
         </article>
       </section>
 
@@ -76,6 +85,7 @@
 
     <div class="modal-layer" id="modalLayer" hidden></div>
     <div class="toast" id="toast" hidden>Design mockup only.</div>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

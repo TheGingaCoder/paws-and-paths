@@ -90,6 +90,27 @@ button:active {
     #e5eadf;
 }
 
+.real-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #e5eadf;
+}
+
+.real-map .leaflet-tile-pane {
+  filter: saturate(0.54) contrast(0.9) brightness(1.08) sepia(0.08);
+}
+
+.real-map .leaflet-control-container,
+.real-map .leaflet-routing-container {
+  display: none;
+}
+
+.leaflet-container {
+  font: inherit;
+  background: #e5eadf;
+}
+
 .mock-map::before {
   content: "";
   position: absolute;
@@ -99,6 +120,7 @@ button:active {
     linear-gradient(120deg, transparent 47%, rgba(255,255,255,0.55) 48%, rgba(255,255,255,0.55) 52%, transparent 53%);
   background-size: 190px 130px, 240px 170px;
   opacity: 0.62;
+  pointer-events: none;
 }
 
 .park,
@@ -109,6 +131,7 @@ button:active {
 .map-marker,
 .checkpoint {
   position: absolute;
+  z-index: 1;
 }
 
 .park {
@@ -119,6 +142,8 @@ button:active {
   color: #5c7f5d;
   font-size: 0.74rem;
   font-weight: 800;
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .park-one {
@@ -145,12 +170,15 @@ button:active {
   border-radius: 999px;
   background: rgba(165, 205, 223, 0.6);
   transform: rotate(14deg);
+  pointer-events: none;
 }
 
 .road {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
   box-shadow: inset 0 0 0 1px rgba(150, 156, 150, 0.08);
+  opacity: 0.68;
+  pointer-events: none;
 }
 
 .road-main {
@@ -184,6 +212,11 @@ button:active {
   pointer-events: none;
 }
 
+.decorative-routes.is-hidden,
+.map-label.is-hidden {
+  opacity: 0;
+}
+
 .route {
   fill: none;
   stroke-linecap: round;
@@ -213,6 +246,8 @@ button:active {
   font-size: 0.72rem;
   font-weight: 800;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  transition: opacity 220ms ease;
 }
 
 .label-route-one {
@@ -246,6 +281,50 @@ button:active {
   border-radius: 50%;
   background: var(--surface-strong);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+
+.map-pin {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-align: center;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+}
+
+.map-pin i {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #35433a;
+  color: white;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+
+.map-pin span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.map-pin.home i,
+.map-pin.finish i {
+  background: var(--warning);
+}
+
+.map-pin.user i {
+  background: #2f80ed;
+}
+
+.map-pin.builder i {
+  background: var(--accent-dark);
 }
 
 .home-marker {
@@ -298,6 +377,43 @@ button:active {
   display: grid;
   gap: 12px;
   animation: slideInRight 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-builder {
+  position: fixed;
+  left: 14px;
+  right: 14px;
+  bottom: 268px;
+  z-index: 6;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  animation: cardRise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-builder h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+}
+
+.route-builder p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.builder-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.builder-actions .primary-action,
+.builder-actions .secondary-action,
+.builder-actions .ghost-action {
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 .round-control {
@@ -508,8 +624,22 @@ button:active {
   padding: 14px;
 }
 
+.route-card.selected {
+  box-shadow: 0 14px 34px rgba(52, 122, 66, 0.16);
+}
+
+.mini-map-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-radius: 18px;
+  background: transparent;
+  text-align: inherit;
+}
+
 .mini-map {
   position: relative;
+  display: block;
   height: 112px;
   overflow: hidden;
   border-radius: 18px;
@@ -1120,7 +1250,8 @@ button:active {
   .map-search,
   .map-controls,
   .walk-card,
-  .tab-bar {
+  .tab-bar,
+  .route-builder {
     position: absolute;
   }
 }

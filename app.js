@@ -1,31 +1,9 @@
-const routes = [
-  {
-    name: "Evening Park Loop",
-    distance: "2.4 km",
-    checkpoints: 5,
-    lastWalked: "Yesterday",
-    longest: "48 min",
-    tone: "green"
-  },
-  {
-    name: "Morning Sniff Route",
-    distance: "1.8 km",
-    checkpoints: 4,
-    lastWalked: "Monday",
-    longest: "36 min",
-    tone: "amber"
-  },
-  {
-    name: "Canal Calm Walk",
-    distance: "3.1 km",
-    checkpoints: 6,
-    lastWalked: "Last week",
-    longest: "1 hr 4 min",
-    tone: "blue"
-  }
-];
-
+const ROUTE_STORAGE_KEY = "paws-paths:routes";
 const DOG_STORAGE_KEY = "paws-paths:prototype-dogs";
+const HOME_STORAGE_KEY = "paws-paths:home-base";
+const DEFAULT_CENTER = [51.505, -0.09];
+const MAP_ZOOM = 15;
+
 const DOG_BREEDS = [
   "Mixed Breed",
   "Cocker Spaniel",
@@ -53,7 +31,22 @@ const DOG_BREEDS = [
   "Rottweiler",
   "Other"
 ];
+
+let routes = loadRoutes();
 let dogs = loadDogs();
+let activeRouteId = routes[0]?.id ?? null;
+let map = null;
+let routeLayer = null;
+let checkpointLayer = null;
+let builderLayer = null;
+let userLayer = null;
+let homeMarker = null;
+let routeBuilder = {
+  active: false,
+  points: [],
+  geometry: [],
+  distanceKm: 0
+};
 
 const screens = {
   map: document.getElementById("mapScreen"),
@@ -64,6 +57,12 @@ const screens = {
 
 const modalLayer = document.getElementById("modalLayer");
 const toast = document.getElementById("toast");
+const builderPanel = document.getElementById("routeBuilder");
+const builderTitle = document.getElementById("builderTitle");
+const builderHint = document.getElementById("builderHint");
+const activeRouteName = document.getElementById("activeRouteName");
+const activeRouteMeta = document.getElementById("activeRouteMeta");
+const mapSearchLabel = document.getElementById("mapSearchLabel");
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
@@ -73,7 +72,16 @@ document.addEventListener("click", (event) => {
   const action = event.target.closest("[data-action]");
   if (!action) return;
   const type = action.dataset.action;
-  if (type === "create-route") showRouteModal();
+  if (type === "create-route" || type === "start-route-builder") startRouteBuilder();
+  else if (type === "save-built-route") showSaveRouteModal();
+  else if (type === "undo-checkpoint") undoBuilderCheckpoint();
+  else if (type === "cancel-route-builder") cancelRouteBuilder();
+  else if (type === "view-route") selectRoute(action.dataset.id);
+  else if (type === "delete-route") showDeleteRouteModal(action.dataset.id);
+  else if (type === "confirm-delete-route") deleteRoute(action.dataset.id);
+  else if (type === "locate-user") locateUser();
+  else if (type === "set-home") setHomeBase();
+  else if (type === "focus-route") focusActiveRoute();
   else if (type === "add-dog") showDogModal();
   else if (type === "edit-dog") showDogModal(action.dataset.id);
   else if (type === "delete-dog") showDeleteDogModal(action.dataset.id);
@@ -85,10 +93,16 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
-  const form = event.target.closest("#dogForm");
-  if (!form) return;
-  event.preventDefault();
-  await saveDogFromForm(form);
+  const dogForm = event.target.closest("#dogForm");
+  const routeForm = event.target.closest("#routeForm");
+  if (dogForm) {
+    event.preventDefault();
+    await saveDogFromForm(dogForm);
+  }
+  if (routeForm) {
+    event.preventDefault();
+    await saveRouteFromForm(routeForm);
+  }
 });
 
 document.addEventListener("change", async (event) => {
@@ -107,9 +121,43 @@ document.addEventListener("input", (event) => {
   updatePhotoEditorImage();
 });
 
+initMap();
 renderRoutes();
 renderDogs();
 renderAccount();
+renderMapRoutes();
+updateWalkCard();
+hydrateRouteGeometry();
+
+function initMap() {
+  if (!window.L) {
+    showToast("Live map could not load, keeping the designed fallback.");
+    return;
+  }
+  const homeBase = loadHomeBase();
+  const startCenter = homeBase ? [homeBase.lat, homeBase.lng] : DEFAULT_CENTER;
+  map = L.map("realMap", {
+    zoomControl: false,
+    attributionControl: false,
+    preferCanvas: true
+  }).setView(startCenter, MAP_ZOOM);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    crossOrigin: true
+  }).addTo(map);
+
+  routeLayer = L.layerGroup().addTo(map);
+  checkpointLayer = L.layerGroup().addTo(map);
+  builderLayer = L.layerGroup().addTo(map);
+  userLayer = L.layerGroup().addTo(map);
+  map.on("click", (event) => {
+    if (routeBuilder.active) addBuilderCheckpoint(event.latlng);
+  });
+
+  renderHomeBase();
+  if (homeBase) showToast("Opened on your home base");
+}
 
 function switchTab(name) {
   Object.entries(screens).forEach(([key, screen]) => {
@@ -118,6 +166,7 @@ function switchTab(name) {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === name);
   });
+  if (name === "map" && map) requestAnimationFrame(() => map.invalidateSize());
 }
 
 function renderRoutes() {
@@ -140,25 +189,28 @@ function renderRoutes() {
 }
 
 function routeCard(route) {
+  const activeClass = route.id === activeRouteId ? "selected" : "";
   return `
-    <article class="route-card card">
-      <div class="mini-map ${route.tone}">
-        <svg viewBox="0 0 160 90" preserveAspectRatio="none">
-          <path d="M12 66 C38 28, 66 76, 91 38 S132 20, 148 50" />
-        </svg>
-        <i class="fa-solid fa-route"></i>
-      </div>
+    <article class="route-card card ${activeClass}">
+      <button class="mini-map-button" data-action="view-route" data-id="${route.id}" aria-label="Open ${escapeHtml(route.name)} on map">
+        <span class="mini-map ${route.tone}">
+          <svg viewBox="0 0 160 90" preserveAspectRatio="none">
+            <path d="${miniRoutePath(route)}" />
+          </svg>
+          <i class="fa-solid fa-route"></i>
+        </span>
+      </button>
       <div class="card-main">
         <div class="card-title-row">
-          <h3>${route.name}</h3>
+          <h3>${escapeHtml(route.name)}</h3>
           <div class="icon-pair">
-            <button data-action="toast" aria-label="Edit route"><i class="fa-solid fa-pen"></i></button>
-            <button data-action="confirm" data-title="Delete route?" aria-label="Delete route"><i class="fa-solid fa-trash"></i></button>
+            <button data-action="view-route" data-id="${route.id}" aria-label="Open route"><i class="fa-solid fa-map-location-dot"></i></button>
+            <button data-action="delete-route" data-id="${route.id}" aria-label="Delete route"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>
         <div class="metric-row">
-          <span><i class="fa-solid fa-person-walking"></i>${route.distance}</span>
-          <span><i class="fa-solid fa-location-dot"></i>${route.checkpoints} stops</span>
+          <span><i class="fa-solid fa-person-walking"></i>${formatDistance(route.distanceKm)}</span>
+          <span><i class="fa-solid fa-location-dot"></i>${route.checkpoints.length} stops</span>
         </div>
         <div class="metric-row muted-row">
           <span><i class="fa-solid fa-clock"></i>${route.longest}</span>
@@ -167,6 +219,511 @@ function routeCard(route) {
       </div>
     </article>
   `;
+}
+
+function miniRoutePath(route) {
+  const pathOptions = [
+    "M12 66 C38 28, 66 76, 91 38 S132 20, 148 50",
+    "M12 50 C36 68, 53 18, 82 34 S116 76, 150 28",
+    "M10 66 C42 58, 45 24, 74 30 S99 56, 146 36"
+  ];
+  return pathOptions[Math.abs(hashString(route.id)) % pathOptions.length];
+}
+
+function selectRoute(id) {
+  if (!routes.some((route) => route.id === id)) return;
+  activeRouteId = id;
+  switchTab("map");
+  renderRoutes();
+  renderMapRoutes();
+  focusActiveRoute();
+  updateWalkCard();
+  showToast("Route opened on map");
+}
+
+function renderMapRoutes() {
+  if (!map || !routeLayer || !checkpointLayer) return;
+  routeLayer.clearLayers();
+  checkpointLayer.clearLayers();
+  const route = getActiveRoute();
+  toggleDecorativeMap(Boolean(route));
+  if (!route) return;
+
+  routes.forEach((item) => {
+    const points = getRouteLinePoints(item);
+    if (points.length < 2) return;
+    L.polyline(points, {
+      color: item.id === activeRouteId ? "#347a42" : routeColor(item.tone),
+      weight: item.id === activeRouteId ? 9 : 6,
+      opacity: item.id === activeRouteId ? 0.82 : 0.42,
+      lineCap: "round",
+      lineJoin: "round"
+    }).addTo(routeLayer);
+  });
+
+  route.checkpoints.forEach((checkpoint, index) => {
+    L.marker([checkpoint.lat, checkpoint.lng], {
+      icon: pinIcon(checkpointIcon(index, route.checkpoints.length), checkpoint.label, index === route.checkpoints.length - 1 ? "finish" : "")
+    }).addTo(checkpointLayer);
+  });
+}
+
+async function hydrateRouteGeometry() {
+  const pendingRoutes = routes.filter((route) => route.checkpoints.length >= 2 && !route.geometry.length);
+  if (!pendingRoutes.length) return;
+  for (const route of pendingRoutes) {
+    const routed = await fetchRoadRoute(route.checkpoints);
+    route.geometry = routed.geometry;
+    route.distanceKm = route.distanceKm || routed.distanceKm;
+    saveRoutes();
+    renderRoutes();
+    renderMapRoutes();
+    updateWalkCard();
+  }
+}
+
+function getRouteLinePoints(route) {
+  const geometry = Array.isArray(route.geometry) ? route.geometry : [];
+  if (geometry.length) return geometry.map((point) => [point.lat, point.lng]);
+  return route.checkpoints.map((point) => [point.lat, point.lng]);
+}
+
+function toggleDecorativeMap(hasLiveRoute) {
+  document.querySelector(".decorative-routes")?.classList.toggle("is-hidden", hasLiveRoute);
+  document.querySelectorAll(".map-label").forEach((label) => label.classList.toggle("is-hidden", hasLiveRoute));
+}
+
+function focusActiveRoute() {
+  if (!map) return;
+  const route = getActiveRoute();
+  const points = route ? getRouteLinePoints(route) : [];
+  if (points.length >= 2) {
+    map.fitBounds(L.latLngBounds(points), { padding: [58, 58], maxZoom: 16 });
+    return;
+  }
+  const homeBase = loadHomeBase();
+  if (homeBase) map.setView([homeBase.lat, homeBase.lng], MAP_ZOOM);
+}
+
+function updateWalkCard() {
+  const route = getActiveRoute();
+  const dog = dogs.find((item) => item.selected);
+  if (!route) {
+    activeRouteName.textContent = "Build your first route";
+    activeRouteMeta.textContent = "Tap Build Route to place checkpoints";
+    return;
+  }
+  activeRouteName.textContent = route.name;
+  activeRouteMeta.textContent = `${formatDistance(route.distanceKm)} · ${route.checkpoints.length} checkpoints · ${dog?.name ?? "No dog selected"}`;
+}
+
+function startRouteBuilder() {
+  if (!map) {
+    showToast("The live map is still loading.");
+    return;
+  }
+  routeBuilder = { active: true, points: [], geometry: [], distanceKm: 0 };
+  builderLayer.clearLayers();
+  builderPanel.hidden = false;
+  mapSearchLabel.textContent = "Tap the map to add checkpoints";
+  switchTab("map");
+  updateBuilderPanel();
+  showToast("Tap the map to add checkpoints");
+}
+
+async function addBuilderCheckpoint(latlng) {
+  routeBuilder.points.push({
+    lat: Number(latlng.lat.toFixed(6)),
+    lng: Number(latlng.lng.toFixed(6)),
+    label: checkpointName(routeBuilder.points.length)
+  });
+  await refreshBuilderRoute();
+}
+
+async function undoBuilderCheckpoint() {
+  if (!routeBuilder.active || !routeBuilder.points.length) return;
+  routeBuilder.points.pop();
+  await refreshBuilderRoute();
+}
+
+async function refreshBuilderRoute() {
+  builderLayer.clearLayers();
+  routeBuilder.points.forEach((point, index) => {
+    L.marker([point.lat, point.lng], {
+      icon: pinIcon(checkpointIcon(index, routeBuilder.points.length), point.label, "builder")
+    }).addTo(builderLayer);
+  });
+  if (routeBuilder.points.length >= 2) {
+    const routed = await fetchRoadRoute(routeBuilder.points);
+    routeBuilder.geometry = routed.geometry;
+    routeBuilder.distanceKm = routed.distanceKm;
+    L.polyline(routeBuilder.geometry.map((point) => [point.lat, point.lng]), {
+      color: "#347a42",
+      weight: 9,
+      opacity: 0.82,
+      lineCap: "round",
+      lineJoin: "round",
+      dashArray: "1 16"
+    }).addTo(builderLayer);
+  } else {
+    routeBuilder.geometry = [];
+    routeBuilder.distanceKm = 0;
+  }
+  updateBuilderPanel();
+}
+
+function updateBuilderPanel() {
+  const count = routeBuilder.points.length;
+  builderTitle.textContent = count ? `${count} checkpoint${count === 1 ? "" : "s"} placed` : "Tap the map";
+  builderHint.textContent = count >= 2
+    ? `${formatDistance(routeBuilder.distanceKm)} route preview. Save when it looks right.`
+    : "Add at least two checkpoints to save a route.";
+}
+
+function showSaveRouteModal() {
+  if (!routeBuilder.active || routeBuilder.points.length < 2) {
+    showToast("Add at least two checkpoints first");
+    return;
+  }
+  showModal(`
+    <section class="sheet">
+      <header>
+        <h2>Save Route</h2>
+        <button data-action="close-modal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </header>
+      <form id="routeForm" class="dog-form">
+        <label>Route name<input name="name" value="New Walking Route" required /></label>
+        <div class="readonly-stats">
+          <span><i class="fa-solid fa-location-dot"></i>${routeBuilder.points.length} checkpoints</span>
+          <span><i class="fa-solid fa-route"></i>${formatDistance(routeBuilder.distanceKm)}</span>
+          <span><i class="fa-solid fa-road"></i>Road-following path where available</span>
+        </div>
+        <div class="sheet-actions">
+          <button class="ghost-action" type="button" data-action="close-modal">Cancel</button>
+          <button class="primary-action" type="submit">Save Route</button>
+        </div>
+      </form>
+    </section>
+  `);
+}
+
+async function saveRouteFromForm(form) {
+  const formData = new FormData(form);
+  const name = String(formData.get("name")).trim();
+  if (!name || routeBuilder.points.length < 2) return;
+  const route = {
+    id: createId("route"),
+    name,
+    checkpoints: routeBuilder.points.map((point, index) => ({
+      ...point,
+      label: checkpointName(index)
+    })),
+    geometry: routeBuilder.geometry.length ? routeBuilder.geometry : routeBuilder.points,
+    distanceKm: routeBuilder.distanceKm || estimateDistance(routeBuilder.points),
+    lastWalked: "Not walked yet",
+    longest: "New",
+    tone: routeTone(routes.length)
+  };
+  routes = [route, ...routes];
+  activeRouteId = route.id;
+  saveRoutes();
+  closeModal();
+  cancelRouteBuilder(false);
+  renderRoutes();
+  renderMapRoutes();
+  focusActiveRoute();
+  updateWalkCard();
+  showToast("Route saved");
+}
+
+function cancelRouteBuilder(showMessage = true) {
+  routeBuilder = { active: false, points: [], geometry: [], distanceKm: 0 };
+  builderLayer?.clearLayers();
+  builderPanel.hidden = true;
+  mapSearchLabel.textContent = "Search parks, routes, postcodes";
+  if (showMessage) showToast("Route builder closed");
+}
+
+async function fetchRoadRoute(points) {
+  const fallback = {
+    geometry: curvedFallback(points),
+    distanceKm: estimateDistance(points)
+  };
+  const coords = points.map((point) => `${point.lng},${point.lat}`).join(";");
+  const profiles = ["foot", "walking", "driving"];
+  for (const profile of profiles) {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const data = await response.json();
+      const route = data.routes?.[0];
+      const rawCoordinates = route?.geometry?.coordinates;
+      if (!Array.isArray(rawCoordinates) || rawCoordinates.length < 2) continue;
+      return {
+        geometry: rawCoordinates.map(([lng, lat]) => ({ lat, lng })),
+        distanceKm: Number(((route.distance ?? 0) / 1000).toFixed(2))
+      };
+    } catch {
+      continue;
+    }
+  }
+  return fallback;
+}
+
+function locateUser() {
+  if (!navigator.geolocation || !map) {
+    showToast("Location is not available here");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((position) => {
+    const point = [position.coords.latitude, position.coords.longitude];
+    userLayer.clearLayers();
+    L.marker(point, {
+      icon: pinIcon("fa-location-crosshairs", "You", "user")
+    }).addTo(userLayer);
+    map.setView(point, 16);
+    showToast("Location found");
+  }, () => {
+    showToast("Location permission was not granted");
+  }, {
+    enableHighAccuracy: true,
+    timeout: 9000
+  });
+}
+
+function setHomeBase() {
+  if (!map) return;
+  const center = map.getCenter();
+  const homeBase = {
+    lat: Number(center.lat.toFixed(6)),
+    lng: Number(center.lng.toFixed(6))
+  };
+  localStorage.setItem(HOME_STORAGE_KEY, JSON.stringify(homeBase));
+  renderHomeBase();
+  showToast("Home base set to map centre");
+}
+
+function renderHomeBase() {
+  if (!map) return;
+  const homeBase = loadHomeBase();
+  if (homeMarker) {
+    map.removeLayer(homeMarker);
+    homeMarker = null;
+  }
+  if (!homeBase) return;
+  homeMarker = L.marker([homeBase.lat, homeBase.lng], {
+    icon: pinIcon("fa-house", "Home", "home")
+  }).addTo(map);
+}
+
+function loadHomeBase() {
+  try {
+    const raw = localStorage.getItem(HOME_STORAGE_KEY);
+    const value = raw ? JSON.parse(raw) : null;
+    if (typeof value?.lat === "number" && typeof value?.lng === "number") return value;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function pinIcon(icon, label, variant = "") {
+  return L.divIcon({
+    className: "",
+    html: `<span class="map-pin ${variant}"><i class="fa-solid ${icon}"></i><span>${escapeHtml(label)}</span></span>`,
+    iconSize: [1, 1],
+    iconAnchor: [0, 0]
+  });
+}
+
+function checkpointIcon(index, total) {
+  if (index === 0) return "fa-flag";
+  if (index === total - 1) return "fa-house";
+  return ["fa-location-dot", "fa-tree", "fa-paw", "fa-bench"][index % 4];
+}
+
+function checkpointName(index) {
+  if (index === 0) return "Start";
+  return `Stop ${index + 1}`;
+}
+
+function showDeleteRouteModal(id) {
+  const route = routes.find((item) => item.id === id);
+  if (!route) return;
+  showModal(`
+    <section class="sheet compact-sheet">
+      <div class="warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h2>Delete ${escapeHtml(route.name)}?</h2>
+      <p>This removes the saved route from local storage.</p>
+      <div class="sheet-actions">
+        <button class="ghost-action" data-action="close-modal">Cancel</button>
+        <button class="primary-action danger-action" data-action="confirm-delete-route" data-id="${route.id}">Delete Route</button>
+      </div>
+    </section>
+  `);
+}
+
+function deleteRoute(id) {
+  routes = routes.filter((route) => route.id !== id);
+  if (activeRouteId === id) activeRouteId = routes[0]?.id ?? null;
+  saveRoutes();
+  closeModal();
+  renderRoutes();
+  renderMapRoutes();
+  updateWalkCard();
+  showToast("Route deleted");
+}
+
+function getActiveRoute() {
+  return routes.find((route) => route.id === activeRouteId) ?? routes[0] ?? null;
+}
+
+function routeColor(tone) {
+  if (tone === "amber") return "#d99841";
+  if (tone === "blue") return "#4d91d8";
+  return "#65a86f";
+}
+
+function routeTone(index) {
+  return ["green", "amber", "blue"][index % 3];
+}
+
+function loadRoutes() {
+  try {
+    const raw = localStorage.getItem(ROUTE_STORAGE_KEY);
+    const savedRoutes = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(savedRoutes) && savedRoutes.length) return savedRoutes.map(normalizeRoute);
+  } catch {
+    return defaultRoutes();
+  }
+  return defaultRoutes();
+}
+
+function normalizeRoute(route) {
+  const checkpoints = Array.isArray(route.checkpoints) ? route.checkpoints : [];
+  const geometry = Array.isArray(route.geometry) ? route.geometry : [];
+  return {
+    id: route.id ?? createId("route"),
+    name: route.name ?? "Saved Route",
+    checkpoints: checkpoints.map((point, index) => ({
+      lat: Number(point.lat),
+      lng: Number(point.lng),
+      label: point.label ?? checkpointName(index)
+    })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)),
+    geometry: geometry.map((point) => ({
+      lat: Number(point.lat),
+      lng: Number(point.lng)
+    })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng)),
+    distanceKm: Number(route.distanceKm ?? 0),
+    lastWalked: route.lastWalked ?? "Not walked yet",
+    longest: route.longest ?? "New",
+    tone: route.tone ?? "green"
+  };
+}
+
+function saveRoutes() {
+  localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(routes));
+}
+
+function defaultRoutes() {
+  return [
+    {
+      id: "route-evening",
+      name: "Evening Park Loop",
+      checkpoints: [
+        { lat: 51.5052, lng: -0.0943, label: "Start" },
+        { lat: 51.5071, lng: -0.0907, label: "Park Gate" },
+        { lat: 51.5082, lng: -0.0875, label: "Big Tree" },
+        { lat: 51.5064, lng: -0.0842, label: "Field Loop" },
+        { lat: 51.5042, lng: -0.0878, label: "Home" }
+      ],
+      geometry: [],
+      distanceKm: 2.4,
+      lastWalked: "Yesterday",
+      longest: "48 min",
+      tone: "green"
+    },
+    {
+      id: "route-morning",
+      name: "Morning Sniff Route",
+      checkpoints: [
+        { lat: 51.5028, lng: -0.1004, label: "Start" },
+        { lat: 51.5044, lng: -0.0965, label: "Corner" },
+        { lat: 51.5067, lng: -0.0982, label: "Trees" },
+        { lat: 51.5075, lng: -0.0939, label: "Home" }
+      ],
+      geometry: [],
+      distanceKm: 1.8,
+      lastWalked: "Monday",
+      longest: "36 min",
+      tone: "amber"
+    },
+    {
+      id: "route-canal",
+      name: "Canal Calm Walk",
+      checkpoints: [
+        { lat: 51.5115, lng: -0.0989, label: "Start" },
+        { lat: 51.5104, lng: -0.0941, label: "Bridge" },
+        { lat: 51.5091, lng: -0.0894, label: "Water" },
+        { lat: 51.5078, lng: -0.0847, label: "Turnaround" },
+        { lat: 51.5103, lng: -0.0829, label: "Home" }
+      ],
+      geometry: [],
+      distanceKm: 3.1,
+      lastWalked: "Last week",
+      longest: "1 hr 4 min",
+      tone: "blue"
+    }
+  ];
+}
+
+function curvedFallback(points) {
+  if (points.length < 2) return points;
+  const output = [];
+  points.forEach((point, index) => {
+    const next = points[index + 1];
+    output.push(point);
+    if (!next) return;
+    const midLat = (point.lat + next.lat) / 2;
+    const midLng = (point.lng + next.lng) / 2;
+    const bend = index % 2 === 0 ? 0.0008 : -0.0008;
+    output.push({ lat: midLat + bend, lng: midLng - bend });
+  });
+  return output;
+}
+
+function estimateDistance(points) {
+  if (points.length < 2) return 0;
+  let meters = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    meters += haversine(points[index - 1], points[index]);
+  }
+  return Number((meters / 1000).toFixed(2));
+}
+
+function haversine(a, b) {
+  const radius = 6371000;
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const deltaLat = toRadians(b.lat - a.lat);
+  const deltaLng = toRadians(b.lng - a.lng);
+  const h = Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function toRadians(value) {
+  return value * Math.PI / 180;
+}
+
+function formatDistance(distance) {
+  const value = Number(distance || 0);
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+function hashString(value) {
+  return String(value).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
 }
 
 function renderDogs() {
@@ -276,28 +833,6 @@ function settingsSection(title, icon, items, danger = false) {
   `;
 }
 
-function showRouteModal() {
-  showModal(`
-    <section class="sheet">
-      <header>
-        <h2>Create Route</h2>
-        <button data-action="close-modal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-      </header>
-      <label>Route name<input value="Sunny Park Loop" /></label>
-      <div class="fake-list">
-        <span><i class="fa-solid fa-flag"></i>Start</span>
-        <span><i class="fa-solid fa-location-dot"></i>Park Gate</span>
-        <span><i class="fa-solid fa-tree"></i>Big Tree</span>
-      </div>
-      <button class="secondary-action" data-action="toast"><i class="fa-solid fa-plus"></i>Add Checkpoint</button>
-      <div class="sheet-actions">
-        <button class="ghost-action" data-action="close-modal">Cancel</button>
-        <button class="primary-action" data-action="close-modal">Save Route</button>
-      </div>
-    </section>
-  `);
-}
-
 function showDogModal(id = null) {
   const dog = dogs.find((item) => item.id === id);
   const isEditing = Boolean(dog);
@@ -388,7 +923,8 @@ function closeModal() {
   modalLayer.innerHTML = "";
 }
 
-function showToast() {
+function showToast(message = "Design mockup only.") {
+  toast.textContent = message;
   toast.hidden = false;
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => {
@@ -398,7 +934,7 @@ function showToast() {
 
 async function saveDogFromForm(form) {
   const formData = new FormData(form);
-  const id = formData.get("id") || createId();
+  const id = formData.get("id") || createId("dog");
   const existing = dogs.find((dog) => dog.id === id);
   const nextDog = {
     id,
@@ -422,6 +958,7 @@ async function saveDogFromForm(form) {
   saveDogs();
   closeModal();
   renderDogs();
+  updateWalkCard();
   showToast(`${nextDog.name} saved`);
 }
 
@@ -432,6 +969,7 @@ function deleteDog(id) {
   saveDogs();
   closeModal();
   renderDogs();
+  updateWalkCard();
   showToast("Dog deleted");
 }
 
@@ -439,6 +977,7 @@ function selectDog(id) {
   dogs = dogs.map((dog) => ({ ...dog, selected: dog.id === id }));
   saveDogs();
   renderDogs();
+  updateWalkCard();
   showToast("Dog selected");
 }
 
@@ -454,7 +993,7 @@ function loadDogs() {
 
 function normalizeDog(dog) {
   return {
-    id: dog.id ?? createId(),
+    id: dog.id ?? createId("dog"),
     name: dog.name ?? "",
     breed: dog.breed ?? "Mixed Breed",
     birthday: dog.birthday ?? "",
@@ -482,9 +1021,9 @@ function readFileAsDataUrl(file) {
   });
 }
 
-function createId() {
+function createId(prefix) {
   if (crypto.randomUUID) return crypto.randomUUID();
-  return `dog-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function dogAge(birthday) {
