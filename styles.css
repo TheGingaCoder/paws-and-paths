@@ -584,6 +584,56 @@ button {
   grid-template-columns: 1fr;
 }
 
+.dog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dog-avatar {
+  overflow: hidden;
+}
+
+.dog-avatar img,
+.photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.danger-pill {
+  background: rgba(216, 92, 82, 0.12);
+  color: var(--danger);
+}
+
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 18px;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin: 0;
+}
+
+.empty-state p {
+  max-width: 28ch;
+}
+
+.empty-icon {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 1.7rem;
+}
+
 .selected-badge {
   display: inline-flex;
   align-items: center;
@@ -696,6 +746,46 @@ button {
   font-weight: 780;
 }
 
+.dog-form {
+  display: grid;
+}
+
+.photo-upload {
+  align-items: center;
+  justify-items: center;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(101, 168, 111, 0.08);
+  color: var(--accent-dark);
+  text-align: center;
+  cursor: pointer;
+}
+
+.photo-upload input {
+  display: none;
+}
+
+.photo-preview {
+  display: grid;
+  width: 92px;
+  height: 92px;
+  place-items: center;
+  overflow: hidden;
+  border: 4px solid white;
+  border-radius: 50%;
+  background: var(--surface-strong);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  color: var(--accent-dark);
+  font-size: 1.7rem;
+}
+
+.split-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .sheet input {
   min-height: 48px;
   border: 1px solid var(--line);
@@ -739,6 +829,11 @@ button {
 .compact-sheet .primary-action {
   width: 100%;
   margin-top: 14px;
+}
+
+.danger-action {
+  background: var(--danger);
+  box-shadow: 0 14px 28px rgba(216, 92, 82, 0.2);
 }
 
 .warning-icon {
