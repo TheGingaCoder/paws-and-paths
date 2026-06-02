@@ -51,6 +51,12 @@ button:active {
   transform: scale(0.96);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
 .app-shell {
   position: fixed;
   inset: 0;
@@ -305,7 +311,7 @@ button:active {
 
 .builder-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   align-items: center;
 }
@@ -720,6 +726,7 @@ button:active {
 
 .route-creator {
   position: relative;
+  isolation: isolate;
   height: 100%;
   overflow: hidden;
   background: #e5eadf;
@@ -728,6 +735,7 @@ button:active {
 .creator-map {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: #e5eadf;
 }
 
@@ -744,7 +752,7 @@ button:active {
   top: max(12px, env(safe-area-inset-top));
   left: 12px;
   right: 12px;
-  z-index: 7;
+  z-index: 20;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 12px;
@@ -770,12 +778,13 @@ button:active {
   left: 12px;
   right: 12px;
   bottom: 108px;
-  z-index: 7;
+  z-index: 20;
   display: grid;
   gap: 10px;
   padding: 12px;
   border-radius: 24px;
   animation: cardRise 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: auto;
 }
 
 .creator-segment {

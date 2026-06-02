@@ -328,7 +328,7 @@ function routeMapCreatorMarkup() {
       </div>
       <div class="builder-actions">
         <button class="secondary-action" data-action="undo-creator-checkpoint"><i class="fa-solid fa-rotate-left"></i>Undo</button>
-        <button class="primary-action" data-action="next-route-settings"><i class="fa-solid fa-sliders"></i>Settings</button>
+        <button class="primary-action" data-action="next-route-settings" ${canAdvanceCreator() ? "" : "disabled"}><i class="fa-solid fa-sliders"></i>${canAdvanceCreator() ? "Next" : "Add Stops"}</button>
       </div>
     </section>
   `;
@@ -540,24 +540,33 @@ function renderCreatorLine() {
 
 function updateCreatorPanelText() {
   const status = document.querySelector(".creator-status");
-  if (!status) return;
-  status.innerHTML = `<strong>${routeCreator.points.length} checkpoints</strong><span>${creatorHint()}</span>`;
+  const nextButton = document.querySelector('[data-action="next-route-settings"]');
+  if (status) {
+    status.innerHTML = `<strong>${routeCreator.points.length} checkpoints</strong><span>${creatorHint()}</span>`;
+  }
+  if (nextButton) {
+    const canAdvance = canAdvanceCreator();
+    nextButton.disabled = !canAdvance;
+    nextButton.innerHTML = `<i class="fa-solid fa-sliders"></i>${canAdvance ? "Next" : "Add Stops"}`;
+  }
 }
 
 function creatorHint() {
+  if (routeCreator.points.length < 2) return "Add at least two checkpoints to continue.";
   if (routeCreator.homeLoop && !routeCreator.complete) return "Click Home again to close the loop after adding stops.";
   if (routeCreator.mode === "multi") return "Tap the map to add multi-pass checkpoints; tap a multi marker to link back to it.";
   return "Tap the map to add single-pass checkpoints.";
 }
 
+function canAdvanceCreator() {
+  if (!routeCreator || routeCreator.points.length < 2) return false;
+  return !routeCreator.homeLoop || routeCreator.complete;
+}
+
 function showRouteSettingsStep() {
   if (!routeCreator) return;
-  if (routeCreator.points.length < 2) {
-    showToast("Add at least two checkpoints first");
-    return;
-  }
-  if (routeCreator.homeLoop && !routeCreator.complete) {
-    showToast("Click Home to close the loop first");
+  if (!canAdvanceCreator()) {
+    showToast(routeCreator.homeLoop ? "Click Home to close the loop first" : "Add at least two checkpoints first");
     return;
   }
   routeCreator.step = "settings";
@@ -573,20 +582,23 @@ function showRouteMapStep() {
 
 function setRouteDifficulty(value) {
   if (!routeCreator || !Number.isFinite(value)) return;
+  syncRouteSettingsInputs();
   routeCreator.settings.difficulty = clamp(value, 1, 5);
   renderRoutes();
 }
 
 function setRouteColour(colour) {
   if (!routeCreator || !ROUTE_COLOURS.includes(colour)) return;
+  syncRouteSettingsInputs();
   routeCreator.settings.colour = colour;
   renderRoutes();
 }
 
 async function saveCreatedRoute() {
   if (!routeCreator || routeCreator.points.length < 2) return;
-  const name = document.getElementById("routeName")?.value.trim() || "New Walking Route";
-  const description = document.getElementById("routeDescription")?.value.trim() || "";
+  syncRouteSettingsInputs();
+  const name = routeCreator.settings.name.trim() || "New Walking Route";
+  const description = routeCreator.settings.description.trim();
   const routed = routeCreator.geometry.length ? {
     geometry: routeCreator.geometry,
     distanceKm: routeCreator.distanceKm
@@ -610,8 +622,18 @@ async function saveCreatedRoute() {
   closeRouteCreator(false);
   renderRoutes();
   renderMapRoutes();
+  switchTab("map");
+  focusActiveRoute();
   updateWalkCard();
   showToast("Route saved");
+}
+
+function syncRouteSettingsInputs() {
+  if (!routeCreator) return;
+  const nameInput = document.getElementById("routeName");
+  const descriptionInput = document.getElementById("routeDescription");
+  if (nameInput) routeCreator.settings.name = nameInput.value;
+  if (descriptionInput) routeCreator.settings.description = descriptionInput.value;
 }
 
 function closeRouteCreator(showMessage = true) {
