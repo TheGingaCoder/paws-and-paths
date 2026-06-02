@@ -29,27 +29,14 @@
           <button class="round-control" data-action="focus-route" aria-label="Focus route"><i class="fa-solid fa-route"></i></button>
         </div>
 
-        <aside class="route-builder glass" id="routeBuilder" hidden>
-          <div>
-            <p class="eyebrow">Route Builder</p>
-            <h2 id="builderTitle">Tap the map</h2>
-            <p id="builderHint">Add at least two checkpoints to save a route.</p>
-          </div>
-          <div class="builder-actions">
-            <button class="secondary-action" data-action="undo-checkpoint"><i class="fa-solid fa-rotate-left"></i>Undo</button>
-            <button class="primary-action" data-action="save-built-route"><i class="fa-solid fa-check"></i>Save</button>
-            <button class="ghost-action" data-action="cancel-route-builder">Cancel</button>
-          </div>
-        </aside>
-
         <article class="walk-card glass">
           <div class="walk-icon"><i class="fa-solid fa-dog"></i></div>
           <div>
             <p class="eyebrow">Ready for Walkies?</p>
             <h1 id="activeRouteName">Build your first route</h1>
-            <p id="activeRouteMeta">Search a place or tap Build Route</p>
+            <p id="activeRouteMeta">Search a place or choose a route</p>
           </div>
-          <button class="primary-action" data-action="start-route-builder"><i class="fa-solid fa-route"></i> Build Route</button>
+          <button class="primary-action" data-action="start-active-route"><i class="fa-solid fa-person-walking"></i> Start Route</button>
         </article>
       </section>
 
