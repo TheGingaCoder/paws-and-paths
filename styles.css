@@ -44,6 +44,11 @@ button {
   border: 0;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+button:active {
+  transform: scale(0.96);
 }
 
 .app-shell {
@@ -70,6 +75,10 @@ button {
   box-shadow: var(--shadow);
   backdrop-filter: var(--blur) saturate(1.55);
   -webkit-backdrop-filter: var(--blur) saturate(1.55);
+}
+
+.map-search {
+  animation: dropIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .mock-map {
@@ -288,6 +297,7 @@ button {
   z-index: 5;
   display: grid;
   gap: 12px;
+  animation: slideInRight 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .round-control {
@@ -302,6 +312,15 @@ button {
   backdrop-filter: var(--blur);
 }
 
+.round-control:hover,
+.icon-pair button:hover,
+.small-pill:hover,
+.primary-action:hover,
+.wide-action:hover,
+.secondary-action:hover {
+  transform: translateY(-1px);
+}
+
 .walk-card {
   position: fixed;
   left: 14px;
@@ -314,6 +333,7 @@ button {
   align-items: center;
   padding: 16px;
   border-radius: var(--radius-xl);
+  animation: cardRise 520ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .walk-card h1 {
@@ -394,30 +414,35 @@ button {
   z-index: 10;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: 10px;
   padding: 8px;
   border-radius: 28px;
+  animation: tabBarIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .tab {
   display: grid;
-  min-height: 60px;
+  min-height: 58px;
   place-items: center;
-  gap: 4px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 780;
 }
 
 .tab i {
-  font-size: 1.16rem;
+  font-size: 1.34rem;
+  transition: transform 180ms ease;
 }
 
 .tab.active {
-  background: var(--accent-soft);
+  background: var(--accent);
   color: var(--accent-dark);
+  color: white;
+  box-shadow: 0 10px 24px rgba(52, 122, 66, 0.24);
+}
+
+.tab.active i {
+  transform: scale(1.08);
 }
 
 .content-screen {
@@ -453,6 +478,8 @@ button {
 .card p {
   margin: 0;
   color: var(--muted);
+  font-weight: 400;
+  line-height: 1.38;
 }
 
 .card-list {
@@ -465,6 +492,12 @@ button {
   border-radius: var(--radius-lg);
   background: var(--surface-strong);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.08);
+  animation: cardRise 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.card:active {
+  transform: scale(0.99);
 }
 
 .route-card,
@@ -531,6 +564,7 @@ button {
 .card h3 {
   margin: 0 0 4px;
   font-size: 1.12rem;
+  font-weight: 850;
 }
 
 .icon-pair {
@@ -669,6 +703,7 @@ button {
 
 .settings-section h3 {
   margin: 8px 10px;
+  font-weight: 850;
 }
 
 .settings-row {
@@ -680,12 +715,17 @@ button {
   background: transparent;
   color: var(--text);
   text-align: left;
-  font-weight: 720;
+  font-weight: 400;
+  transition: background-color 160ms ease, transform 160ms ease;
 }
 
 .settings-row span {
   display: inline-flex;
   align-items: center;
+}
+
+.settings-row:active {
+  background: rgba(60, 60, 67, 0.08);
 }
 
 .danger-text span,
@@ -716,7 +756,7 @@ button {
   border-radius: var(--radius-xl);
   background: var(--surface-strong);
   box-shadow: var(--shadow);
-  animation: sheetUp 220ms ease both;
+  animation: sheetUp 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .sheet header {
@@ -982,16 +1022,17 @@ button {
   color: white;
   font-weight: 820;
   box-shadow: var(--shadow);
+  animation: toastPop 220ms ease both;
 }
 
 @keyframes screenIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.995);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1003,6 +1044,61 @@ button {
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes cardRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tabBarIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastPop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 
