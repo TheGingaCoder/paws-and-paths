@@ -93,13 +93,18 @@ document.addEventListener("submit", async (event) => {
 
 document.addEventListener("change", async (event) => {
   if (event.target.id !== "dogPhoto") return;
-  const preview = document.getElementById("dogPhotoPreview");
   const photoData = document.getElementById("dogPhotoData");
   const file = event.target.files?.[0];
   if (!file) return;
   const dataUrl = await readFileAsDataUrl(file);
   photoData.value = dataUrl;
-  preview.innerHTML = `<img src="${dataUrl}" alt="Selected dog photo preview" />`;
+  setPhotoEditorImage(dataUrl, { x: 0, y: 0, scale: 1 });
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.id !== "photoScale") return;
+  document.getElementById("dogPhotoScale").value = event.target.value;
+  updatePhotoEditorImage();
 });
 
 renderRoutes();
@@ -196,7 +201,7 @@ function renderDogs() {
 function dogCard(dog) {
   return `
     <article class="dog-card card ${dog.selected ? "selected" : ""}">
-      <div class="dog-avatar">${dog.photo ? `<img src="${dog.photo}" alt="${escapeHtml(dog.name)} profile photo" />` : '<i class="fa-solid fa-dog"></i>'}</div>
+      <div class="dog-avatar">${dog.photo ? photoImage(dog, `${escapeHtml(dog.name)} profile photo`) : '<i class="fa-solid fa-dog"></i>'}</div>
       <div class="card-main">
         <div class="card-title-row">
           <div>
@@ -305,13 +310,25 @@ function showDogModal(id = null) {
       <form id="dogForm" class="dog-form">
         <input type="hidden" name="id" value="${dog?.id ?? ""}" />
         <input type="hidden" id="dogPhotoData" name="photo" value="${dog?.photo ?? ""}" />
-        <label class="photo-upload">
+        <input type="hidden" id="dogPhotoX" name="photoX" value="${dog?.photoX ?? 0}" />
+        <input type="hidden" id="dogPhotoY" name="photoY" value="${dog?.photoY ?? 0}" />
+        <input type="hidden" id="dogPhotoScale" name="photoScale" value="${dog?.photoScale ?? 1}" />
+        <div class="photo-upload">
           <span id="dogPhotoPreview" class="photo-preview">
-            ${dog?.photo ? `<img src="${dog.photo}" alt="${escapeHtml(dog.name)} profile photo" />` : '<i class="fa-solid fa-image"></i>'}
+            ${dog?.photo ? photoEditorMarkup(dog) : '<i class="fa-solid fa-image"></i>'}
           </span>
-          <span><i class="fa-solid fa-camera"></i>${dog?.photo ? "Change photo" : "Upload photo"}</span>
+          <label class="upload-button" for="dogPhoto"><i class="fa-solid fa-camera"></i>${dog?.photo ? "Change photo" : "Upload photo"}</label>
           <input id="dogPhoto" type="file" accept="image/*" />
-        </label>
+        </div>
+        <div class="photo-adjuster ${dog?.photo ? "" : "is-hidden"}" id="photoAdjuster">
+          <div class="adjuster-title">
+            <span><i class="fa-solid fa-crop-simple"></i>Position photo</span>
+            <small>Drag inside the circle, then adjust zoom.</small>
+          </div>
+          <label>Scale
+            <input id="photoScale" type="range" min="1" max="2.4" step="0.05" value="${dog?.photoScale ?? 1}" />
+          </label>
+        </div>
         <label>Name<input name="name" value="${escapeHtml(dog?.name ?? "")}" placeholder="Milo" required /></label>
         <label>Breed
           <select name="breed" required>
@@ -331,6 +348,7 @@ function showDogModal(id = null) {
       </form>
     </section>
   `);
+  bindPhotoDrag();
 }
 
 function showDeleteDogModal(id) {
@@ -388,6 +406,9 @@ async function saveDogFromForm(form) {
     breed: String(formData.get("breed")).trim(),
     birthday: String(formData.get("birthday")),
     photo: String(formData.get("photo") || ""),
+    photoX: Number(formData.get("photoX") || 0),
+    photoY: Number(formData.get("photoY") || 0),
+    photoScale: Number(formData.get("photoScale") || 1),
     totalWalks: existing?.totalWalks ?? 0,
     favouriteRoute: existing?.favouriteRoute ?? "",
     totalDistance: existing?.totalDistance ?? 0,
@@ -438,6 +459,9 @@ function normalizeDog(dog) {
     breed: dog.breed ?? "Mixed Breed",
     birthday: dog.birthday ?? "",
     photo: dog.photo ?? "",
+    photoX: Number(dog.photoX ?? 0),
+    photoY: Number(dog.photoY ?? 0),
+    photoScale: Number(dog.photoScale ?? 1),
     totalWalks: Number(dog.totalWalks ?? 0),
     favouriteRoute: dog.favouriteRoute ?? "",
     totalDistance: Number(dog.totalDistance ?? 0),
@@ -489,6 +513,83 @@ function formatBirthday(birthday) {
 function formatDogDistance(distance) {
   const safeDistance = Number(distance || 0);
   return `${safeDistance.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+function photoImage(dog, altText) {
+  return `<img src="${dog.photo}" alt="${altText}" style="${photoStyle(dog)}" />`;
+}
+
+function photoEditorMarkup(dog) {
+  return `
+    <span class="photo-frame" id="photoFrame" data-dragging="false">
+      <img id="photoEditorImage" src="${dog.photo}" alt="Dog photo crop preview" style="${photoStyle(dog)}" />
+      <span class="circle-guide" aria-hidden="true"></span>
+    </span>
+  `;
+}
+
+function photoStyle(dog) {
+  return `--photo-x: ${Number(dog.photoX ?? 0)}%; --photo-y: ${Number(dog.photoY ?? 0)}%; --photo-scale: ${Number(dog.photoScale ?? 1)};`;
+}
+
+function setPhotoEditorImage(photo, crop) {
+  document.getElementById("dogPhotoX").value = crop.x;
+  document.getElementById("dogPhotoY").value = crop.y;
+  document.getElementById("dogPhotoScale").value = crop.scale;
+  const scaleInput = document.getElementById("photoScale");
+  if (scaleInput) scaleInput.value = crop.scale;
+  document.getElementById("dogPhotoPreview").innerHTML = photoEditorMarkup({
+    photo,
+    photoX: crop.x,
+    photoY: crop.y,
+    photoScale: crop.scale
+  });
+  document.getElementById("photoAdjuster")?.classList.remove("is-hidden");
+  bindPhotoDrag();
+}
+
+function updatePhotoEditorImage() {
+  const image = document.getElementById("photoEditorImage");
+  if (!image) return;
+  image.style.setProperty("--photo-x", `${document.getElementById("dogPhotoX").value}%`);
+  image.style.setProperty("--photo-y", `${document.getElementById("dogPhotoY").value}%`);
+  image.style.setProperty("--photo-scale", document.getElementById("dogPhotoScale").value);
+}
+
+function bindPhotoDrag() {
+  const frame = document.getElementById("photoFrame");
+  if (!frame || frame.dataset.bound === "true") return;
+  frame.dataset.bound = "true";
+  let start = null;
+  frame.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    frame.setPointerCapture(event.pointerId);
+    start = {
+      x: event.clientX,
+      y: event.clientY,
+      cropX: Number(document.getElementById("dogPhotoX").value || 0),
+      cropY: Number(document.getElementById("dogPhotoY").value || 0)
+    };
+  });
+  frame.addEventListener("pointermove", (event) => {
+    if (!start) return;
+    const bounds = frame.getBoundingClientRect();
+    const deltaX = ((event.clientX - start.x) / bounds.width) * 100;
+    const deltaY = ((event.clientY - start.y) / bounds.height) * 100;
+    document.getElementById("dogPhotoX").value = clamp(start.cropX + deltaX, -45, 45).toFixed(1);
+    document.getElementById("dogPhotoY").value = clamp(start.cropY + deltaY, -45, 45).toFixed(1);
+    updatePhotoEditorImage();
+  });
+  frame.addEventListener("pointerup", () => {
+    start = null;
+  });
+  frame.addEventListener("pointercancel", () => {
+    start = null;
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function breedOptions(selectedBreed = "Mixed Breed") {
