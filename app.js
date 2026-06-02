@@ -1,4 +1,5 @@
 const ROUTE_STORAGE_KEY = "paws-paths:routes";
+const ROUTE_RESET_KEY = "paws-paths:routes-cleared-v3";
 const DOG_STORAGE_KEY = "paws-paths:prototype-dogs";
 const HOME_STORAGE_KEY = "paws-paths:home-base";
 const DEFAULT_CENTER = [51.505, -0.09];
@@ -40,7 +41,9 @@ let routeLayer = null;
 let checkpointLayer = null;
 let builderLayer = null;
 let userLayer = null;
+let searchLayer = null;
 let homeMarker = null;
+let searchMatches = [];
 let routeBuilder = {
   active: false,
   points: [],
@@ -62,7 +65,9 @@ const builderTitle = document.getElementById("builderTitle");
 const builderHint = document.getElementById("builderHint");
 const activeRouteName = document.getElementById("activeRouteName");
 const activeRouteMeta = document.getElementById("activeRouteMeta");
-const mapSearchLabel = document.getElementById("mapSearchLabel");
+const mapSearchForm = document.getElementById("mapSearchForm");
+const mapSearchInput = document.getElementById("mapSearchInput");
+const searchResults = document.getElementById("searchResults");
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
@@ -79,6 +84,8 @@ document.addEventListener("click", (event) => {
   else if (type === "view-route") selectRoute(action.dataset.id);
   else if (type === "delete-route") showDeleteRouteModal(action.dataset.id);
   else if (type === "confirm-delete-route") deleteRoute(action.dataset.id);
+  else if (type === "select-search-result") selectSearchResult(Number(action.dataset.index));
+  else if (type === "close-search-results") hideSearchResults();
   else if (type === "locate-user") locateUser();
   else if (type === "set-home") setHomeBase();
   else if (type === "focus-route") focusActiveRoute();
@@ -95,6 +102,11 @@ document.addEventListener("click", (event) => {
 document.addEventListener("submit", async (event) => {
   const dogForm = event.target.closest("#dogForm");
   const routeForm = event.target.closest("#routeForm");
+  const searchForm = event.target.closest("#mapSearchForm");
+  if (searchForm) {
+    event.preventDefault();
+    searchLocation();
+  }
   if (dogForm) {
     event.preventDefault();
     await saveDogFromForm(dogForm);
@@ -151,6 +163,7 @@ function initMap() {
   checkpointLayer = L.layerGroup().addTo(map);
   builderLayer = L.layerGroup().addTo(map);
   userLayer = L.layerGroup().addTo(map);
+  searchLayer = L.layerGroup().addTo(map);
   map.on("click", (event) => {
     if (routeBuilder.active) addBuilderCheckpoint(event.latlng);
   });
@@ -170,6 +183,16 @@ function switchTab(name) {
 }
 
 function renderRoutes() {
+  const routeMarkup = routes.length
+    ? routes.map(routeCard).join("")
+    : `
+      <article class="empty-state card">
+        <div class="empty-icon"><i class="fa-solid fa-route"></i></div>
+        <h3>No routes yet</h3>
+        <p>Build your first walking route by placing checkpoints on the map.</p>
+        <button class="primary-action" data-action="create-route"><i class="fa-solid fa-plus"></i>Create Route</button>
+      </article>
+    `;
   screens.routes.innerHTML = `
     <div class="screen-scroll">
       <header class="screen-header">
@@ -182,7 +205,7 @@ function renderRoutes() {
         Create New Route
       </button>
       <div class="card-list">
-        ${routes.map(routeCard).join("")}
+        ${routeMarkup}
       </div>
     </div>
   `;
@@ -246,7 +269,6 @@ function renderMapRoutes() {
   routeLayer.clearLayers();
   checkpointLayer.clearLayers();
   const route = getActiveRoute();
-  toggleDecorativeMap(Boolean(route));
   if (!route) return;
 
   routes.forEach((item) => {
@@ -288,11 +310,6 @@ function getRouteLinePoints(route) {
   return route.checkpoints.map((point) => [point.lat, point.lng]);
 }
 
-function toggleDecorativeMap(hasLiveRoute) {
-  document.querySelector(".decorative-routes")?.classList.toggle("is-hidden", hasLiveRoute);
-  document.querySelectorAll(".map-label").forEach((label) => label.classList.toggle("is-hidden", hasLiveRoute));
-}
-
 function focusActiveRoute() {
   if (!map) return;
   const route = getActiveRoute();
@@ -325,7 +342,7 @@ function startRouteBuilder() {
   routeBuilder = { active: true, points: [], geometry: [], distanceKm: 0 };
   builderLayer.clearLayers();
   builderPanel.hidden = false;
-  mapSearchLabel.textContent = "Tap the map to add checkpoints";
+  mapSearchInput.placeholder = "Tap the map to add checkpoints";
   switchTab("map");
   updateBuilderPanel();
   showToast("Tap the map to add checkpoints");
@@ -440,7 +457,7 @@ function cancelRouteBuilder(showMessage = true) {
   routeBuilder = { active: false, points: [], geometry: [], distanceKm: 0 };
   builderLayer?.clearLayers();
   builderPanel.hidden = true;
-  mapSearchLabel.textContent = "Search parks, routes, postcodes";
+  mapSearchInput.placeholder = "Search parks, routes, postcodes";
   if (showMessage) showToast("Route builder closed");
 }
 
@@ -469,6 +486,108 @@ async function fetchRoadRoute(points) {
     }
   }
   return fallback;
+}
+
+async function searchLocation() {
+  const query = mapSearchInput.value.trim();
+  if (!query) {
+    hideSearchResults();
+    showToast("Type a place to search");
+    return;
+  }
+  if (!map) {
+    showToast("The map is still loading");
+    return;
+  }
+  mapSearchInput.blur();
+  showToast("Searching places...");
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      limit: "5"
+    });
+    const response = await fetch(`https://photon.komoot.io/api/?${params.toString()}`, {
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    if (!response.ok) throw new Error("Search failed");
+    const results = await response.json();
+    searchMatches = Array.isArray(results.features) ? results.features : [];
+    renderSearchResults();
+  } catch {
+    searchMatches = [];
+    hideSearchResults();
+    showToast("Search is unavailable right now");
+  }
+}
+
+function renderSearchResults() {
+  if (!searchMatches.length) {
+    searchResults.innerHTML = `
+      <button class="search-result" type="button" data-action="close-search-results">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span><strong>No results</strong><span>Try a park, street, postcode, or town name.</span></span>
+      </button>
+    `;
+    searchResults.hidden = false;
+    return;
+  }
+  searchResults.innerHTML = searchMatches.map((result, index) => `
+    <button class="search-result" type="button" data-action="select-search-result" data-index="${index}">
+      <i class="fa-solid fa-location-dot"></i>
+      <span>
+        <strong>${escapeHtml(searchResultTitle(result))}</strong>
+        <span>${escapeHtml(searchResultSubtitle(result))}</span>
+      </span>
+    </button>
+  `).join("");
+  searchResults.hidden = false;
+}
+
+function selectSearchResult(index) {
+  const result = searchMatches[index];
+  const lng = Number(result?.geometry?.coordinates?.[0]);
+  const lat = Number(result?.geometry?.coordinates?.[1]);
+  if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  searchLayer.clearLayers();
+  L.marker([lat, lng], {
+    icon: pinIcon("fa-location-dot", searchResultTitle(result), "search")
+  }).addTo(searchLayer);
+  map.setView([lat, lng], 16);
+  mapSearchInput.value = searchResultTitle(result);
+  hideSearchResults();
+  switchTab("map");
+  showToast("Location found");
+}
+
+function hideSearchResults() {
+  searchResults.hidden = true;
+  searchResults.innerHTML = "";
+}
+
+function searchResultTitle(result) {
+  const properties = result?.properties ?? {};
+  return properties.name ||
+    properties.street ||
+    properties.district ||
+    properties.city ||
+    properties.county ||
+    properties.state ||
+    properties.country ||
+    "Location";
+}
+
+function searchResultSubtitle(result) {
+  const properties = result?.properties ?? {};
+  return [
+    properties.street,
+    properties.district,
+    properties.city,
+    properties.county,
+    properties.state,
+    properties.country
+  ].filter(Boolean).filter((item, index, items) => items.indexOf(item) === index).join(", ") || "Location result";
 }
 
 function locateUser() {
@@ -590,14 +709,18 @@ function routeTone(index) {
 }
 
 function loadRoutes() {
+  if (localStorage.getItem(ROUTE_RESET_KEY) !== "true") {
+    localStorage.removeItem(ROUTE_STORAGE_KEY);
+    localStorage.setItem(ROUTE_RESET_KEY, "true");
+  }
   try {
     const raw = localStorage.getItem(ROUTE_STORAGE_KEY);
     const savedRoutes = raw ? JSON.parse(raw) : [];
     if (Array.isArray(savedRoutes) && savedRoutes.length) return savedRoutes.map(normalizeRoute);
   } catch {
-    return defaultRoutes();
+    return [];
   }
-  return defaultRoutes();
+  return [];
 }
 
 function normalizeRoute(route) {
@@ -624,58 +747,6 @@ function normalizeRoute(route) {
 
 function saveRoutes() {
   localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(routes));
-}
-
-function defaultRoutes() {
-  return [
-    {
-      id: "route-evening",
-      name: "Evening Park Loop",
-      checkpoints: [
-        { lat: 51.5052, lng: -0.0943, label: "Start" },
-        { lat: 51.5071, lng: -0.0907, label: "Park Gate" },
-        { lat: 51.5082, lng: -0.0875, label: "Big Tree" },
-        { lat: 51.5064, lng: -0.0842, label: "Field Loop" },
-        { lat: 51.5042, lng: -0.0878, label: "Home" }
-      ],
-      geometry: [],
-      distanceKm: 2.4,
-      lastWalked: "Yesterday",
-      longest: "48 min",
-      tone: "green"
-    },
-    {
-      id: "route-morning",
-      name: "Morning Sniff Route",
-      checkpoints: [
-        { lat: 51.5028, lng: -0.1004, label: "Start" },
-        { lat: 51.5044, lng: -0.0965, label: "Corner" },
-        { lat: 51.5067, lng: -0.0982, label: "Trees" },
-        { lat: 51.5075, lng: -0.0939, label: "Home" }
-      ],
-      geometry: [],
-      distanceKm: 1.8,
-      lastWalked: "Monday",
-      longest: "36 min",
-      tone: "amber"
-    },
-    {
-      id: "route-canal",
-      name: "Canal Calm Walk",
-      checkpoints: [
-        { lat: 51.5115, lng: -0.0989, label: "Start" },
-        { lat: 51.5104, lng: -0.0941, label: "Bridge" },
-        { lat: 51.5091, lng: -0.0894, label: "Water" },
-        { lat: 51.5078, lng: -0.0847, label: "Turnaround" },
-        { lat: 51.5103, lng: -0.0829, label: "Home" }
-      ],
-      geometry: [],
-      distanceKm: 3.1,
-      lastWalked: "Last week",
-      longest: "1 hr 4 min",
-      tone: "blue"
-    }
-  ];
 }
 
 function curvedFallback(points) {

@@ -13,25 +13,15 @@
       <section class="screen active" id="mapScreen" data-screen="map" aria-label="Map">
         <div class="mock-map">
           <div id="realMap" class="real-map" aria-label="Interactive route map"></div>
-          <div class="park park-one">Oak Meadow</div>
-          <div class="park park-two">North Field</div>
-          <div class="water"></div>
-          <div class="road road-main"></div>
-          <div class="road road-second"></div>
-          <div class="road road-third"></div>
-          <svg class="route-layer decorative-routes" viewBox="0 0 390 844" preserveAspectRatio="none" aria-hidden="true">
-            <path class="route route-evening" d="M72 585 C118 515, 128 458, 184 423 S290 364, 314 290" />
-            <path class="route route-morning" d="M88 334 C128 304, 156 270, 205 260 S286 253, 324 216" />
-            <path class="route route-complete" d="M72 585 C118 515, 128 458, 184 423" />
-          </svg>
-          <div class="map-label label-route-one">Evening Park Loop</div>
-          <div class="map-label label-route-two">Morning Sniff Route</div>
         </div>
 
-        <header class="map-search glass">
+        <form class="map-search glass" id="mapSearchForm" role="search">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <span id="mapSearchLabel">Search parks, routes, postcodes</span>
-        </header>
+          <input id="mapSearchInput" type="search" placeholder="Search parks, routes, postcodes" autocomplete="off" />
+          <button type="submit" aria-label="Search"><i class="fa-solid fa-arrow-right"></i></button>
+        </form>
+
+        <div class="search-results glass" id="searchResults" hidden></div>
 
         <div class="map-controls">
           <button class="round-control" data-action="locate-user" aria-label="Locate me"><i class="fa-solid fa-location-crosshairs"></i></button>
@@ -56,8 +46,8 @@
           <div class="walk-icon"><i class="fa-solid fa-dog"></i></div>
           <div>
             <p class="eyebrow">Ready for Walkies?</p>
-            <h1 id="activeRouteName">Evening Park Loop</h1>
-            <p id="activeRouteMeta">2.4 km &middot; 5 checkpoints &middot; Milo selected</p>
+            <h1 id="activeRouteName">Build your first route</h1>
+            <p id="activeRouteMeta">Search a place or tap Build Route</p>
           </div>
           <button class="primary-action" data-action="start-route-builder"><i class="fa-solid fa-route"></i> Build Route</button>
         </article>
