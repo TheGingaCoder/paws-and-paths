@@ -26,6 +26,33 @@ const routes = [
 ];
 
 const DOG_STORAGE_KEY = "paws-paths:prototype-dogs";
+const DOG_BREEDS = [
+  "Mixed Breed",
+  "Cocker Spaniel",
+  "Labrador",
+  "Golden Retriever",
+  "Border Collie",
+  "German Shepherd",
+  "French Bulldog",
+  "Dachshund",
+  "Beagle",
+  "Poodle",
+  "Cockapoo",
+  "Cavapoo",
+  "Springer Spaniel",
+  "Staffordshire Bull Terrier",
+  "Jack Russell Terrier",
+  "Shih Tzu",
+  "Chihuahua",
+  "Husky",
+  "Boxer",
+  "Whippet",
+  "Greyhound",
+  "Border Terrier",
+  "Schnauzer",
+  "Rottweiler",
+  "Other"
+];
 let dogs = loadDogs();
 
 const screens = {
@@ -286,12 +313,16 @@ function showDogModal(id = null) {
           <input id="dogPhoto" type="file" accept="image/*" />
         </label>
         <label>Name<input name="name" value="${escapeHtml(dog?.name ?? "")}" placeholder="Milo" required /></label>
-        <label>Breed<input name="breed" value="${escapeHtml(dog?.breed ?? "")}" placeholder="Cocker Spaniel" required /></label>
+        <label>Breed
+          <select name="breed" required>
+            ${breedOptions(dog?.breed)}
+          </select>
+        </label>
         <label>Birthday<input name="birthday" type="date" value="${dog?.birthday ?? ""}" required /></label>
-        <label>Favourite route<input name="favouriteRoute" value="${escapeHtml(dog?.favouriteRoute ?? "")}" placeholder="Evening Park Loop" /></label>
-        <div class="split-fields">
-          <label>Total walks<input name="totalWalks" type="number" min="0" value="${dog?.totalWalks ?? 0}" /></label>
-          <label>Total distance (km)<input name="totalDistance" type="number" min="0" step="0.1" value="${dog?.totalDistance ?? 0}" /></label>
+        <div class="readonly-stats">
+          <span><i class="fa-solid fa-person-walking"></i>${dog?.totalWalks ?? 0} walks</span>
+          <span><i class="fa-solid fa-chart-simple"></i>${formatDogDistance(dog?.totalDistance ?? 0)}</span>
+          <span><i class="fa-solid fa-heart"></i>${escapeHtml(dog?.favouriteRoute || "Favourite route will appear after walks")}</span>
         </div>
         <div class="sheet-actions">
           <button class="ghost-action" type="button" data-action="close-modal">Cancel</button>
@@ -357,9 +388,9 @@ async function saveDogFromForm(form) {
     breed: String(formData.get("breed")).trim(),
     birthday: String(formData.get("birthday")),
     photo: String(formData.get("photo") || ""),
-    totalWalks: Number(formData.get("totalWalks") || 0),
-    favouriteRoute: String(formData.get("favouriteRoute") || "").trim(),
-    totalDistance: Number(formData.get("totalDistance") || 0),
+    totalWalks: existing?.totalWalks ?? 0,
+    favouriteRoute: existing?.favouriteRoute ?? "",
+    totalDistance: existing?.totalDistance ?? 0,
     selected: existing?.selected ?? dogs.length === 0
   };
   if (!nextDog.name || !nextDog.breed || !nextDog.birthday) return;
@@ -393,10 +424,25 @@ function selectDog(id) {
 function loadDogs() {
   try {
     const raw = localStorage.getItem(DOG_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const savedDogs = raw ? JSON.parse(raw) : [];
+    return Array.isArray(savedDogs) ? savedDogs.map(normalizeDog) : [];
   } catch {
     return [];
   }
+}
+
+function normalizeDog(dog) {
+  return {
+    id: dog.id ?? createId(),
+    name: dog.name ?? "",
+    breed: dog.breed ?? "Mixed Breed",
+    birthday: dog.birthday ?? "",
+    photo: dog.photo ?? "",
+    totalWalks: Number(dog.totalWalks ?? 0),
+    favouriteRoute: dog.favouriteRoute ?? "",
+    totalDistance: Number(dog.totalDistance ?? 0),
+    selected: Boolean(dog.selected)
+  };
 }
 
 function saveDogs() {
@@ -443,6 +489,13 @@ function formatBirthday(birthday) {
 function formatDogDistance(distance) {
   const safeDistance = Number(distance || 0);
   return `${safeDistance.toLocaleString(undefined, { maximumFractionDigits: 1 })} km`;
+}
+
+function breedOptions(selectedBreed = "Mixed Breed") {
+  const normalizedBreed = DOG_BREEDS.includes(selectedBreed) ? selectedBreed : "Other";
+  return DOG_BREEDS.map((breed) =>
+    `<option value="${escapeHtml(breed)}" ${breed === normalizedBreed ? "selected" : ""}>${escapeHtml(breed)}</option>`
+  ).join("");
 }
 
 function escapeHtml(value) {
