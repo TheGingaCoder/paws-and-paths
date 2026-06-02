@@ -65,7 +65,6 @@ const builderTitle = document.getElementById("builderTitle");
 const builderHint = document.getElementById("builderHint");
 const activeRouteName = document.getElementById("activeRouteName");
 const activeRouteMeta = document.getElementById("activeRouteMeta");
-const mapSearchForm = document.getElementById("mapSearchForm");
 const mapSearchInput = document.getElementById("mapSearchInput");
 const searchResults = document.getElementById("searchResults");
 
@@ -84,6 +83,7 @@ document.addEventListener("click", (event) => {
   else if (type === "view-route") selectRoute(action.dataset.id);
   else if (type === "delete-route") showDeleteRouteModal(action.dataset.id);
   else if (type === "confirm-delete-route") deleteRoute(action.dataset.id);
+  else if (type === "search-location") searchLocation();
   else if (type === "select-search-result") selectSearchResult(Number(action.dataset.index));
   else if (type === "close-search-results") hideSearchResults();
   else if (type === "locate-user") locateUser();
@@ -102,11 +102,6 @@ document.addEventListener("click", (event) => {
 document.addEventListener("submit", async (event) => {
   const dogForm = event.target.closest("#dogForm");
   const routeForm = event.target.closest("#routeForm");
-  const searchForm = event.target.closest("#mapSearchForm");
-  if (searchForm) {
-    event.preventDefault();
-    searchLocation();
-  }
   if (dogForm) {
     event.preventDefault();
     await saveDogFromForm(dogForm);
@@ -133,6 +128,13 @@ document.addEventListener("input", (event) => {
   updatePhotoEditorImage();
 });
 
+mapSearchInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  searchLocation();
+});
+
+cleanUrlAfterOldSearchSubmit();
 initMap();
 renderRoutes();
 renderDogs();
@@ -140,6 +142,11 @@ renderAccount();
 renderMapRoutes();
 updateWalkCard();
 hydrateRouteGeometry();
+
+function cleanUrlAfterOldSearchSubmit() {
+  if (!window.location.href.endsWith("?")) return;
+  window.history.replaceState({}, "", window.location.href.slice(0, -1));
+}
 
 function initMap() {
   if (!window.L) {
@@ -315,11 +322,11 @@ function focusActiveRoute() {
   const route = getActiveRoute();
   const points = route ? getRouteLinePoints(route) : [];
   if (points.length >= 2) {
-    map.fitBounds(L.latLngBounds(points), { padding: [58, 58], maxZoom: 16 });
+    map.flyToBounds(L.latLngBounds(points), { padding: [58, 58], maxZoom: 16, duration: 0.85 });
     return;
   }
   const homeBase = loadHomeBase();
-  if (homeBase) map.setView([homeBase.lat, homeBase.lng], MAP_ZOOM);
+  if (homeBase) map.flyTo([homeBase.lat, homeBase.lng], MAP_ZOOM, { duration: 0.85 });
 }
 
 function updateWalkCard() {
@@ -554,7 +561,11 @@ function selectSearchResult(index) {
   L.marker([lat, lng], {
     icon: pinIcon("fa-location-dot", searchResultTitle(result), "search")
   }).addTo(searchLayer);
-  map.setView([lat, lng], 16);
+  map.flyTo([lat, lng], 16, {
+    animate: true,
+    duration: 1.1,
+    easeLinearity: 0.25
+  });
   mapSearchInput.value = searchResultTitle(result);
   hideSearchResults();
   switchTab("map");
@@ -601,7 +612,11 @@ function locateUser() {
     L.marker(point, {
       icon: pinIcon("fa-location-crosshairs", "You", "user")
     }).addTo(userLayer);
-    map.setView(point, 16);
+    map.flyTo(point, 16, {
+      animate: true,
+      duration: 0.95,
+      easeLinearity: 0.25
+    });
     showToast("Location found");
   }, () => {
     showToast("Location permission was not granted");

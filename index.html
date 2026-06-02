@@ -15,11 +15,11 @@
           <div id="realMap" class="real-map" aria-label="Interactive route map"></div>
         </div>
 
-        <form class="map-search glass" id="mapSearchForm" role="search">
+        <div class="map-search glass" id="mapSearchBar" role="search">
           <i class="fa-solid fa-magnifying-glass"></i>
           <input id="mapSearchInput" type="search" placeholder="Search parks, routes, postcodes" autocomplete="off" />
-          <button type="submit" aria-label="Search"><i class="fa-solid fa-arrow-right"></i></button>
-        </form>
+          <button type="button" data-action="search-location" aria-label="Search"><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
 
         <div class="search-results glass" id="searchResults" hidden></div>
 
