@@ -163,6 +163,10 @@ button:disabled {
   background: var(--accent-dark);
 }
 
+.map-pin.route-checkpoint i {
+  background: var(--pin-colour, var(--accent-dark));
+}
+
 .map-pin.multi i {
   background: #9b51e0;
 }
@@ -182,6 +186,75 @@ button:disabled {
   height: 46px;
   background: var(--pin-colour, var(--accent-dark));
   font-size: 1.05rem;
+}
+
+.route-centre-marker {
+  display: grid;
+  min-width: 126px;
+  max-width: 190px;
+  gap: 5px;
+  padding: 9px 11px;
+  border: 2px solid color-mix(in srgb, var(--route-colour) 72%, white);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  pointer-events: auto;
+}
+
+.route-centre-marker::after {
+  content: "";
+  justify-self: center;
+  width: 12px;
+  height: 12px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: var(--route-colour);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
+.route-centre-marker strong {
+  color: var(--route-colour);
+  font-size: 0.82rem;
+  line-height: 1.1;
+}
+
+.route-centre-marker span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.22;
+}
+
+.route-centre-marker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: var(--route-colour);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.route-centre-marker.active {
+  min-width: 184px;
+  padding: 12px;
+  border-width: 3px;
+  background: rgba(255, 255, 255, 0.94);
+  transform: translate(-50%, -58%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+}
+
+.route-centre-marker.active strong {
+  font-size: 1rem;
 }
 
 .map-search {
@@ -357,6 +430,10 @@ button:disabled {
   padding: 16px;
   border-radius: var(--radius-xl);
   animation: cardRise 520ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.screen.has-active-route .walk-card {
+  display: none;
 }
 
 .walk-card h1 {

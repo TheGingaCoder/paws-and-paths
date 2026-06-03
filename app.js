@@ -187,6 +187,7 @@ function switchTab(name) {
   });
   if (name === "map" && map) requestAnimationFrame(() => map.invalidateSize());
   if (name === "routes" && creatorMap) requestAnimationFrame(() => creatorMap.invalidateSize());
+  updateMapRouteState();
 }
 
 function renderRoutes() {
@@ -691,22 +692,44 @@ function renderMapRoutes() {
   routeLayer.clearLayers();
   checkpointLayer.clearLayers();
   const route = getActiveRoute();
+  updateMapRouteState();
+  routes.forEach((item) => {
+    const isActive = item.id === route?.id;
+    const linePoints = getRouteLinePoints(item);
+    const shapePoints = getRouteShapePoints(item);
+    if (shapePoints.length >= 3) {
+      L.polygon(shapePoints, {
+        color: item.colour,
+        weight: isActive ? 4 : 2,
+        opacity: isActive ? 0.9 : 0.42,
+        fillColor: item.colour,
+        fillOpacity: isActive ? 0.18 : 0.09,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(routeLayer);
+    }
+    if (linePoints.length >= 2) {
+      L.polyline(linePoints, {
+        color: item.colour,
+        weight: isActive ? 7 : 4,
+        opacity: isActive ? 0.82 : 0.34,
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(routeLayer);
+    }
+    const centre = routeCentre(item);
+    if (centre) {
+      L.marker(centre, {
+        icon: routeMainIcon(item, isActive)
+      }).addTo(checkpointLayer);
+    }
+  });
   if (!route) return;
-  const points = getRouteLinePoints(route);
-  if (points.length >= 2) {
-    L.polyline(points, {
-      color: route.colour,
-      weight: 9,
-      opacity: 0.82,
-      lineCap: "round",
-      lineJoin: "round"
-    }).addTo(routeLayer);
-  }
   route.checkpoints.forEach((checkpoint, index) => {
     const isStart = index === 0;
     const icon = checkpoint.kind === "home" ? "fa-house" : checkpoint.type === "multi" ? "fa-repeat" : checkpointIcon(index, route.checkpoints.length);
-    const label = isStart ? route.name : checkpoint.label;
-    const variant = isStart ? "route-start" : checkpoint.type === "multi" ? "multi" : checkpoint.kind === "home" ? "home" : "";
+    const label = checkpoint.label;
+    const variant = checkpoint.type === "multi" ? "multi" : checkpoint.kind === "home" ? "home" : "route-checkpoint";
     L.marker([checkpoint.lat, checkpoint.lng], {
       icon: pinIcon(icon, label, variant, route.colour)
     }).addTo(checkpointLayer);
@@ -733,6 +756,71 @@ function getRouteLinePoints(route) {
   return route.checkpoints.map((point) => [point.lat, point.lng]);
 }
 
+function getRouteShapePoints(route) {
+  const checkpoints = route.checkpoints
+    .map((point) => [point.lat, point.lng])
+    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+  if (checkpoints.length < 3) return checkpoints;
+  const first = checkpoints[0];
+  const last = checkpoints[checkpoints.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) return [...checkpoints, first];
+  return checkpoints;
+}
+
+function routeCentre(route) {
+  const shapePoints = getRouteShapePoints(route);
+  if (shapePoints.length >= 4) {
+    const centroid = polygonCentroid(shapePoints);
+    if (centroid) return centroid;
+  }
+  const source = getRouteLinePoints(route);
+  if (!source.length) return null;
+  const sums = source.reduce((total, [lat, lng]) => ({
+    lat: total.lat + lat,
+    lng: total.lng + lng
+  }), { lat: 0, lng: 0 });
+  return [sums.lat / source.length, sums.lng / source.length];
+}
+
+function polygonCentroid(points) {
+  let area = 0;
+  let latSum = 0;
+  let lngSum = 0;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const [lat1, lng1] = points[index];
+    const [lat2, lng2] = points[index + 1];
+    const cross = lng1 * lat2 - lng2 * lat1;
+    area += cross;
+    lngSum += (lng1 + lng2) * cross;
+    latSum += (lat1 + lat2) * cross;
+  }
+  if (Math.abs(area) < 0.0000001) return null;
+  return [latSum / (3 * area), lngSum / (3 * area)];
+}
+
+function routeMainIcon(route, isActive) {
+  const meta = `${formatDistance(route.distanceKm)} | ${route.checkpoints.length} stops | ${route.difficulty}/5`;
+  const description = route.description ? `<span>${escapeHtml(route.description)}</span>` : "";
+  const details = isActive
+    ? `<span>${escapeHtml(meta)}</span>${description}<button type="button" data-action="start-active-route"><i class="fa-solid fa-person-walking"></i>Start</button>`
+    : "";
+  return L.divIcon({
+    className: "",
+    html: `
+      <div class="route-centre-marker ${isActive ? "active" : ""}" data-action="view-route" data-id="${route.id}" style="--route-colour: ${route.colour}">
+        <strong>${escapeHtml(route.name)}</strong>
+        ${details}
+      </div>
+    `,
+    iconSize: [1, 1],
+    iconAnchor: [0, 0]
+  });
+}
+
+function updateMapRouteState() {
+  screens.map.classList.toggle("has-active-route", Boolean(getActiveRoute()));
+}
+
 function focusActiveRoute() {
   if (!map) return;
   const route = getActiveRoute();
@@ -747,6 +835,7 @@ function focusActiveRoute() {
 
 function updateWalkCard() {
   const route = getActiveRoute();
+  updateMapRouteState();
   if (!route) {
     activeRouteName.textContent = "Choose a route";
     activeRouteMeta.textContent = "Create routes from the Routes tab";
