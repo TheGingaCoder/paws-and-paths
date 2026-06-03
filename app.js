@@ -36,7 +36,7 @@ const DOG_BREEDS = [
 
 let routes = loadRoutes();
 let dogs = loadDogs();
-let activeRouteId = routes[0]?.id ?? null;
+let activeRouteId = null;
 let map = null;
 let routeLayer = null;
 let checkpointLayer = null;
@@ -98,7 +98,8 @@ document.addEventListener("click", (event) => {
   else if (type === "delete-dog") showDeleteDogModal(action.dataset.id);
   else if (type === "confirm-delete-dog") deleteDog(action.dataset.id);
   else if (type === "select-dog") selectDog(action.dataset.id);
-  else if (type === "reset-data") resetData(action.dataset.scope);
+  else if (type === "reset-data") showResetDataModal(action.dataset.scope);
+  else if (type === "confirm-reset-data") resetData(action.dataset.scope);
   else if (type === "confirm") showConfirmModal(action.dataset.title ?? "Design mockup");
   else if (type === "close-modal") closeModal();
   else showToast();
@@ -644,13 +645,11 @@ async function saveCreatedRoute() {
     tone: "green"
   };
   routes = [route, ...routes];
-  activeRouteId = route.id;
+  activeRouteId = null;
   saveRoutes();
   closeRouteCreator(false);
   renderRoutes();
   renderMapRoutes();
-  switchTab("map");
-  focusActiveRoute();
   updateWalkCard();
   showToast("Route saved");
 }
@@ -724,7 +723,8 @@ function renderMapRoutes() {
     const centre = routeCentre(item);
     if (centre) {
       L.marker(centre, {
-        icon: routeMainIcon(item, isActive)
+        icon: routeMainIcon(item, isActive),
+        zIndexOffset: isActive ? 1200 : 900
       }).addTo(checkpointLayer);
     }
   });
@@ -1120,7 +1120,7 @@ function showDeleteRouteModal(id) {
 
 function deleteRoute(id) {
   routes = routes.filter((route) => route.id !== id);
-  if (activeRouteId === id) activeRouteId = routes[0]?.id ?? null;
+  if (activeRouteId === id) activeRouteId = null;
   saveRoutes();
   closeModal();
   renderRoutes();
@@ -1130,7 +1130,7 @@ function deleteRoute(id) {
 }
 
 function getActiveRoute() {
-  return routes.find((route) => route.id === activeRouteId) ?? routes[0] ?? null;
+  return routes.find((route) => route.id === activeRouteId) ?? null;
 }
 
 function loadRoutes() {
@@ -1335,6 +1335,26 @@ function settingsSection(title, icon, items, danger = false) {
   `;
 }
 
+function showResetDataModal(scope) {
+  const labels = {
+    routes: "Reset routes?",
+    dogs: "Reset dogs?",
+    home: "Reset home base?",
+    all: "Reset all local data?"
+  };
+  showModal(`
+    <section class="sheet compact-sheet">
+      <div class="warning-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h2>${labels[scope] ?? "Reset data?"}</h2>
+      <p>This will permanently remove the selected local test data from this browser.</p>
+      <div class="sheet-actions">
+        <button class="ghost-action" data-action="close-modal">Cancel</button>
+        <button class="primary-action danger-action" data-action="confirm-reset-data" data-scope="${scope}">Reset</button>
+      </div>
+    </section>
+  `);
+}
+
 function resetData(scope) {
   if (scope === "routes" || scope === "all") {
     routes = [];
@@ -1354,6 +1374,7 @@ function resetData(scope) {
   renderRoutes();
   renderDogs();
   updateWalkCard();
+  closeModal();
   showToast("Local data reset");
 }
 

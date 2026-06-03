@@ -204,6 +204,8 @@ button:disabled {
   backdrop-filter: blur(18px) saturate(1.35);
   -webkit-backdrop-filter: blur(18px) saturate(1.35);
   pointer-events: auto;
+  position: relative;
+  z-index: 50;
 }
 
 .route-centre-marker::after {
@@ -248,13 +250,21 @@ button:disabled {
   min-width: 184px;
   padding: 12px;
   border-width: 3px;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.98);
   transform: translate(-50%, -58%);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
 }
 
 .route-centre-marker.active strong {
   font-size: 1rem;
+}
+
+.leaflet-marker-icon:has(.route-centre-marker) {
+  z-index: 900 !important;
+}
+
+.leaflet-marker-icon:has(.route-centre-marker.active) {
+  z-index: 1000 !important;
 }
 
 .map-search {
