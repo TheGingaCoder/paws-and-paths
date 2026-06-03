@@ -462,8 +462,7 @@ function undoCreatorCheckpoint() {
 function setCheckpointMode(mode) {
   if (!routeCreator) return;
   routeCreator.mode = mode === "multi" ? "multi" : "single";
-  renderRoutes();
-  requestAnimationFrame(initCreatorMap);
+  updateCreatorControls();
 }
 
 function toggleHomeLoop() {
@@ -476,8 +475,9 @@ function toggleHomeLoop() {
   routeCreator.complete = false;
   routeCreator.points = routeCreator.points.filter((point) => point.kind !== "home");
   if (routeCreator.homeLoop) routeCreator.points.unshift(homeCheckpoint("Home Start"));
-  renderRoutes();
-  requestAnimationFrame(initCreatorMap);
+  renderCreatorHomeMarker();
+  refreshCreatorRoute();
+  updateCreatorControls();
 }
 
 function homeCheckpoint(label) {
@@ -512,8 +512,18 @@ function renderCreatorCheckpoints() {
     const icon = point.kind === "home" ? "fa-house" : point.type === "multi" ? "fa-repeat" : checkpointIcon(index, routeCreator.points.length);
     const variant = point.kind === "home" ? "home" : point.type === "multi" ? "multi" : "builder";
     const marker = L.marker([point.lat, point.lng], {
+      draggable: point.kind !== "home",
       icon: pinIcon(icon, point.label, variant)
     }).addTo(creatorLayer);
+    marker.on("dragend", async (event) => {
+      const nextPosition = event.target.getLatLng();
+      point.lat = Number(nextPosition.lat.toFixed(6));
+      point.lng = Number(nextPosition.lng.toFixed(6));
+      routeCreator.geometry = [];
+      routeCreator.distanceKm = 0;
+      await refreshCreatorRoute();
+      showToast(`${point.label} moved`);
+    });
     if (point.type === "multi" && point.kind !== "home") {
       marker.on("click", (event) => {
         L.DomEvent.stopPropagation(event.originalEvent);
@@ -549,6 +559,22 @@ function updateCreatorPanelText() {
     nextButton.disabled = !canAdvance;
     nextButton.innerHTML = `<i class="fa-solid fa-sliders"></i>${canAdvance ? "Next" : "Add Stops"}`;
   }
+}
+
+function updateCreatorControls() {
+  document.querySelectorAll('[data-action="set-checkpoint-mode"]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.mode === routeCreator.mode);
+  });
+  const toggle = document.querySelector('[data-action="toggle-home-loop"]');
+  if (toggle) {
+    toggle.classList.toggle("active", routeCreator.homeLoop);
+    const icon = toggle.querySelector(".fa-toggle-on, .fa-toggle-off");
+    if (icon) {
+      icon.classList.toggle("fa-toggle-on", routeCreator.homeLoop);
+      icon.classList.toggle("fa-toggle-off", !routeCreator.homeLoop);
+    }
+  }
+  updateCreatorPanelText();
 }
 
 function creatorHint() {
@@ -782,10 +808,15 @@ async function fetchRoadRoute(points) {
     distanceKm: estimateDistance(points)
   };
   const coords = points.map((point) => `${point.lng},${point.lat}`).join(";");
-  const profiles = ["foot", "walking", "driving"];
-  for (const profile of profiles) {
+  const routeEndpoints = [
+    `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${coords}?overview=full&geometries=geojson`,
+    `https://routing.openstreetmap.de/routed-foot/route/v1/walking/${coords}?overview=full&geometries=geojson`,
+    `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+    `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=geojson`,
+    `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
+  ];
+  for (const url of routeEndpoints) {
     try {
-      const url = `https://router.project-osrm.org/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
       const response = await fetch(url);
       if (!response.ok) continue;
       const data = await response.json();
