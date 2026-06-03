@@ -705,7 +705,9 @@ function renderMapRoutes() {
         fillColor: item.colour,
         fillOpacity: isActive ? 0.18 : 0.09,
         lineCap: "round",
-        lineJoin: "round"
+        lineJoin: "round",
+        smoothFactor: 0.25,
+        noClip: true
       }).addTo(routeLayer);
     }
     if (linePoints.length >= 2) {
@@ -714,7 +716,9 @@ function renderMapRoutes() {
         weight: isActive ? 7 : 4,
         opacity: isActive ? 0.82 : 0.34,
         lineCap: "round",
-        lineJoin: "round"
+        lineJoin: "round",
+        smoothFactor: 0.25,
+        noClip: true
       }).addTo(routeLayer);
     }
     const centre = routeCentre(item);
@@ -723,16 +727,6 @@ function renderMapRoutes() {
         icon: routeMainIcon(item, isActive)
       }).addTo(checkpointLayer);
     }
-  });
-  if (!route) return;
-  route.checkpoints.forEach((checkpoint, index) => {
-    const isStart = index === 0;
-    const icon = checkpoint.kind === "home" ? "fa-house" : checkpoint.type === "multi" ? "fa-repeat" : checkpointIcon(index, route.checkpoints.length);
-    const label = checkpoint.label;
-    const variant = checkpoint.type === "multi" ? "multi" : checkpoint.kind === "home" ? "home" : "route-checkpoint";
-    L.marker([checkpoint.lat, checkpoint.lng], {
-      icon: pinIcon(icon, label, variant, route.colour)
-    }).addTo(checkpointLayer);
   });
 }
 
@@ -757,14 +751,16 @@ function getRouteLinePoints(route) {
 }
 
 function getRouteShapePoints(route) {
-  const checkpoints = route.checkpoints
+  const geometry = Array.isArray(route.geometry) ? route.geometry : [];
+  const source = geometry.length >= 3 ? geometry : route.checkpoints;
+  const points = source
     .map((point) => [point.lat, point.lng])
     .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
-  if (checkpoints.length < 3) return checkpoints;
-  const first = checkpoints[0];
-  const last = checkpoints[checkpoints.length - 1];
-  if (first[0] !== last[0] || first[1] !== last[1]) return [...checkpoints, first];
-  return checkpoints;
+  if (points.length < 3) return points;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) return [...points, first];
+  return points;
 }
 
 function routeCentre(route) {
